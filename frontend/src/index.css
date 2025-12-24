@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+/* Print styles */
+@media print {
+  /* Hide non-essential elements */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Reset backgrounds and margins */
+  body {
+    @apply bg-white;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Page settings */
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  /* Prevent page breaks in bad places */
+  .print\:break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Force page break before */
+  .print\:break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Remove shadows and borders for cleaner print */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  /* Adjust spacing for print */
+  .print\:space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  /* Print grid adjustments */
+  .print\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Better table styles for print */
+  table {
+    border-collapse: collapse;
+  }
+
+  th, td {
+    border: 1px solid #e5e7eb;
+  }
+
+  /* Ensure links print with visible text */
+  a {
+    text-decoration: none;
+  }
+
+  /* Hide interactive elements */
+  button:not(.print\:visible),
+  input,
+  textarea,
+  select {
+    appearance: none;
+  }
+
+  /* Ensure cards are visible */
+  .bg-white {
+    background-color: white !important;
+  }
+}

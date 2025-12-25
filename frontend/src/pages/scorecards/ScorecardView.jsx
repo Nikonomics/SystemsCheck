@@ -53,7 +53,7 @@ export function ScorecardView() {
   const [activityLog, setActivityLog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedSystems, setExpandedSystems] = useState(new Set([0, 1, 2]));
+  const [expandedSystems, setExpandedSystems] = useState(new Set());
   const [exportingPdf, setExportingPdf] = useState(false);
 
   // Load scorecard data
@@ -93,7 +93,7 @@ export function ScorecardView() {
     }));
 
     const totalScore = systemScores.reduce((sum, s) => sum + s.score, 0);
-    const percentage = (totalScore / 800) * 100;
+    const percentage = (totalScore / 700) * 100;
 
     return {
       systemScores,
@@ -211,7 +211,7 @@ export function ScorecardView() {
   };
 
   // Check if user can edit
-  const canEdit = scorecard?.status === 'draft';
+  const canEdit = scorecard?.status === 'draft' || scorecard?.status === 'trial_close';
 
   if (loading) {
     return (
@@ -275,19 +275,22 @@ export function ScorecardView() {
               <div className="text-sm text-gray-500 uppercase">Total Score</div>
               <div className={`text-4xl font-bold ${getScoreTextClass(overallPercentage)}`}>
                 {scores.totalScore}
-                <span className="text-2xl text-gray-400">/800</span>
+                <span className="text-2xl text-gray-400">/700</span>
               </div>
               <div className={`text-lg font-medium ${getScoreTextClass(overallPercentage)}`}>
                 {overallPercentage}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1 font-mono">
+                {scores.systemScores.map(s => `S${s.systemNumber}:${s.score.toFixed(0)}`).join(' ')}
               </div>
             </div>
 
             <div className="flex gap-2 print:hidden">
               {canEdit && (
                 <Link to={`/scorecards/${id}/edit`}>
-                  <Button variant="secondary" size="sm">
+                  <Button variant={scorecard?.status === 'trial_close' ? 'primary' : 'secondary'} size="sm">
                     <Pencil className="h-4 w-4 mr-1" />
-                    Edit
+                    {scorecard?.status === 'trial_close' ? 'Complete Audit' : 'Edit'}
                   </Button>
                 </Link>
               )}

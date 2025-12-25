@@ -2,6 +2,15 @@ import client from './client';
 
 export const scorecardsApi = {
   /**
+   * List all scorecards the user has access to
+   * @param {object} params - Query params: status, facility_id, year, month, page, limit
+   */
+  list: async (params = {}) => {
+    const response = await client.get('/scorecards', { params });
+    return response.data;
+  },
+
+  /**
    * Get a single scorecard by ID with all systems and items
    */
   get: async (id) => {
@@ -38,6 +47,25 @@ export const scorecardsApi = {
    */
   getActivityLog: async (id) => {
     const response = await client.get(`/scorecards/${id}/activity`);
+    return response.data;
+  },
+
+  /**
+   * Delete a scorecard (only draft or trial_close)
+   */
+  delete: async (id) => {
+    const response = await client.delete(`/scorecards/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Update system completion status
+   * @param {number} scorecardId - The scorecard ID
+   * @param {number} systemNumber - The system number (1-7)
+   * @param {object} data - { completedById?, completedAt?, clear? }
+   */
+  updateSystemCompletion: async (scorecardId, systemNumber, data = {}) => {
+    const response = await client.patch(`/scorecards/${scorecardId}/systems/${systemNumber}`, data);
     return response.data;
   },
 };

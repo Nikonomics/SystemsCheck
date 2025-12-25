@@ -384,7 +384,7 @@ export function FacilityComparison() {
                     />
                     <h3 className="font-medium text-gray-900 truncate">{facility.name}</h3>
                     <p className="text-xs text-gray-500">{facility.team}</p>
-                    <p className={`text-2xl font-bold mt-2 ${getScoreClass((facility.avgScore / 800) * 100)}`}>
+                    <p className={`text-2xl font-bold mt-2 ${getScoreClass((facility.avgScore / 700) * 100)}`}>
                       {facility.avgScore || '—'}
                     </p>
                     <p className="text-xs text-gray-500">
@@ -408,7 +408,7 @@ export function FacilityComparison() {
                     <LineChart data={trendChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis domain={[0, 800]} tick={{ fontSize: 12 }} />
+                      <YAxis domain={[0, 700]} tick={{ fontSize: 12 }} />
                       <Tooltip />
                       <Legend />
                       {comparisonData.facilities?.map((facility, index) => (

@@ -12,9 +12,11 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  UserCheck,
 } from 'lucide-react';
 import { scorecardsApi } from '../../api/scorecards';
 import { facilitiesApi } from '../../api/facilities';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { useToast } from '../../components/ui/Toast';
@@ -46,6 +48,7 @@ export function ScorecardForm() {
   const { id, facilityId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const isNew = !id && facilityId;
 
   // State
@@ -53,7 +56,7 @@ export function ScorecardForm() {
   const [facility, setFacility] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState(0); // 0-7 for systems, 8 for summary
+  const [activeTab, setActiveTab] = useState(0); // 0-6 for systems (sorted), 7+ for summary
 
   // Save state
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'error'
@@ -122,10 +125,21 @@ export function ScorecardForm() {
 
     setSaveStatus('saving');
 
+    // Capture the items we're saving so we only clear those
+    const savedItemIds = Object.keys(changes.items || {});
+
     try {
-      const response = await scorecardsApi.update(scorecard.id, changes);
-      setScorecard(response.scorecard);
-      setPendingChanges({});
+      await scorecardsApi.update(scorecard.id, changes);
+
+      // Only clear the specific changes that were saved, not overwrite local state
+      // This prevents race conditions where new changes made during save are lost
+      setPendingChanges(prev => {
+        if (!prev.items) return {};
+        const remainingItems = { ...prev.items };
+        savedItemIds.forEach(id => delete remainingItems[id]);
+        return Object.keys(remainingItems).length > 0 ? { items: remainingItems } : {};
+      });
+
       setSaveStatus('saved');
     } catch (err) {
       console.error('Error saving:', err);
@@ -163,7 +177,7 @@ export function ScorecardForm() {
   // Handle item change
   const handleItemChange = useCallback((itemId, changes) => {
     setScorecard(prev => {
-      if (!prev) return prev;
+      if (!prev || !prev.systems) return prev;
 
       const newSystems = prev.systems.map(system => ({
         ...system,
@@ -195,7 +209,7 @@ export function ScorecardForm() {
 
       // Add to local state immediately
       setScorecard(prev => {
-        if (!prev) return prev;
+        if (!prev || !prev.systems) return prev;
 
         const newSystems = prev.systems.map(system => {
           if (system.id !== systemId) return system;
@@ -232,7 +246,7 @@ export function ScorecardForm() {
 
       // Remove from local state immediately
       setScorecard(prev => {
-        if (!prev) return prev;
+        if (!prev || !prev.systems) return prev;
 
         const newSystems = prev.systems.map(system => {
           if (system.id !== systemId) return system;
@@ -260,6 +274,101 @@ export function ScorecardForm() {
       console.error('Error removing resident:', err);
       setSaveStatus('error');
       toast.error('Failed to remove resident');
+    }
+  }, [scorecard?.id, toast]);
+
+  // Handle mark system as complete
+  const handleMarkComplete = useCallback(async (systemNumber) => {
+    if (!scorecard?.id) return;
+
+    try {
+      const response = await scorecardsApi.updateSystemCompletion(scorecard.id, systemNumber, {
+        completedById: user?.id,
+        completedAt: new Date().toISOString()
+      });
+
+      // Update local state with the new completion info
+      setScorecard(prev => {
+        if (!prev || !prev.systems) return prev;
+
+        const newSystems = prev.systems.map(system => {
+          if (system.systemNumber !== systemNumber) return system;
+          return {
+            ...system,
+            completedById: response.system.completedById,
+            completedAt: response.system.completedAt,
+            completedBy: response.system.completedBy
+          };
+        });
+
+        return { ...prev, systems: newSystems };
+      });
+
+      toast.success(`System ${systemNumber} marked as complete`);
+    } catch (err) {
+      console.error('Error marking system complete:', err);
+      toast.error('Failed to mark system as complete');
+    }
+  }, [scorecard?.id, user?.id, toast]);
+
+  // Handle clear system completion
+  const handleClearComplete = useCallback(async (systemNumber) => {
+    if (!scorecard?.id) return;
+
+    try {
+      await scorecardsApi.updateSystemCompletion(scorecard.id, systemNumber, { clear: true });
+
+      // Update local state to clear completion
+      setScorecard(prev => {
+        if (!prev || !prev.systems) return prev;
+
+        const newSystems = prev.systems.map(system => {
+          if (system.systemNumber !== systemNumber) return system;
+          return {
+            ...system,
+            completedById: null,
+            completedAt: null,
+            completedBy: null
+          };
+        });
+
+        return { ...prev, systems: newSystems };
+      });
+
+      toast.success(`System ${systemNumber} completion cleared`);
+    } catch (err) {
+      console.error('Error clearing system completion:', err);
+      toast.error('Failed to clear system completion');
+    }
+  }, [scorecard?.id, toast]);
+
+  // Handle system notes change
+  const handleNotesChange = useCallback(async (systemNumber, notes) => {
+    if (!scorecard?.id) return;
+
+    try {
+      // Update via the existing update endpoint using legacy format
+      await scorecardsApi.update(scorecard.id, {
+        systems: {
+          [systemNumber]: { notes }
+        }
+      });
+
+      // Update local state
+      setScorecard(prev => {
+        if (!prev || !prev.systems) return prev;
+
+        const newSystems = prev.systems.map(system => {
+          if (system.systemNumber !== systemNumber) return system;
+          return { ...system, notes };
+        });
+
+        return { ...prev, systems: newSystems };
+      });
+    } catch (err) {
+      console.error('Error saving notes:', err);
+      toast.error('Failed to save notes');
+      throw err; // Re-throw to signal failure to the component
     }
   }, [scorecard?.id, toast]);
 
@@ -404,8 +513,12 @@ export function ScorecardForm() {
 
   const isEditable = scorecard.status === 'draft';
   const statusBadge = statusBadges[scorecard.status];
-  const currentSystem = activeTab < 8 ? scorecard.systems[activeTab] : null;
-  const isSummaryTab = activeTab === 8;
+
+  // Sort systems by systemNumber for consistent navigation
+  const sortedSystems = [...(scorecard.systems || [])].sort((a, b) => a.systemNumber - b.systemNumber);
+  const summaryTabIndex = sortedSystems.length;
+  const isSummaryTab = activeTab >= summaryTabIndex;
+  const currentSystem = isSummaryTab ? null : sortedSystems[activeTab];
 
   return (
     <div className="space-y-4">
@@ -489,7 +602,10 @@ export function ScorecardForm() {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <div className="text-xs text-gray-500 uppercase">Total Score</div>
-              <ScoreDisplay earned={totalScore} possible={800} size="xl" showPercentage />
+              <ScoreDisplay earned={totalScore} possible={700} size="xl" showPercentage />
+              <div className="text-xs text-gray-500 mt-1 font-mono">
+                {sortedSystems?.map(s => `S${s.systemNumber}:${calculateSystemTotal(s.items || []).toFixed(0)}`).join(' ')}
+              </div>
             </div>
 
             {isEditable && (
@@ -525,54 +641,56 @@ export function ScorecardForm() {
           </div>
         </div>
 
-        {/* Tab navigation */}
-        <div className="mt-4 -mb-4 overflow-x-auto">
-          <div className="flex space-x-1 min-w-max">
-            {scorecard.systems.map((system, index) => {
-              const systemScore = calculateSystemTotal(system.items || []);
-              const complete = isSystemComplete(system);
+        {/* Tab navigation - compact design */}
+        <div className="mt-4 -mb-4">
+          <div className="flex flex-wrap gap-1">
+            {sortedSystems.map((system, sortedIndex) => {
+                const systemScore = calculateSystemTotal(system.items || []);
+                const allItemsScored = isSystemComplete(system);
+                const markedComplete = !!system.completedById;
 
-              return (
-                <button
-                  key={system.id}
-                  onClick={() => setActiveTab(index)}
-                  className={`
-                    flex items-center px-4 py-3 text-sm font-medium rounded-t-lg
-                    transition-colors whitespace-nowrap
-                    ${activeTab === index
-                      ? 'bg-white text-primary-600 border-b-2 border-primary-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  <span className="flex items-center gap-2">
-                    {complete && (
-                      <Check className="h-4 w-4 text-green-500" />
-                    )}
-                    <span>
-                      {system.systemNumber}. {system.systemName}
+                return (
+                  <button
+                    key={system.id}
+                    onClick={() => setActiveTab(sortedIndex)}
+                    className={`
+                      flex items-center px-3 py-2 text-xs font-medium rounded-lg
+                      transition-colors
+                      ${activeTab === sortedIndex
+                        ? 'bg-primary-600 text-white'
+                        : markedComplete
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }
+                    `}
+                    title={`${system.systemNumber}. ${system.systemName}${markedComplete ? ' (Completed)' : ''}`}
+                  >
+                    {markedComplete ? (
+                      <UserCheck className="h-3 w-3 mr-1 flex-shrink-0" />
+                    ) : allItemsScored ? (
+                      <Check className="h-3 w-3 mr-1 flex-shrink-0" />
+                    ) : null}
+                    <span className="font-semibold">{system.systemNumber}</span>
+                    <span className={`ml-1 ${activeTab === sortedIndex ? 'text-primary-200' : markedComplete ? 'text-green-500' : 'text-gray-400'}`}>
+                      {systemScore.toFixed(0)}
                     </span>
-                    <span className={`text-xs ${activeTab === index ? 'text-primary-500' : 'text-gray-400'}`}>
-                      ({systemScore.toFixed(0)}/100)
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
 
             {/* Summary tab */}
             <button
-              onClick={() => setActiveTab(8)}
+              onClick={() => setActiveTab(summaryTabIndex)}
               className={`
-                flex items-center px-4 py-3 text-sm font-medium rounded-t-lg
-                transition-colors whitespace-nowrap
-                ${activeTab === 8
-                  ? 'bg-white text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                flex items-center px-3 py-2 text-xs font-medium rounded-lg
+                transition-colors
+                ${isSummaryTab
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }
               `}
             >
-              <ClipboardList className="h-4 w-4 mr-2" />
+              <ClipboardList className="h-3 w-3 mr-1" />
               Summary
             </button>
           </div>
@@ -586,8 +704,11 @@ export function ScorecardForm() {
       <div className="pt-4">
         {isSummaryTab ? (
           <SummaryTab
-            systems={scorecard.systems}
-            onNavigateToSystem={handleNavigateToSystem}
+            systems={sortedSystems}
+            onNavigateToSystem={(systemNumber) => {
+              const idx = sortedSystems.findIndex(s => s.systemNumber === systemNumber);
+              if (idx >= 0) setActiveTab(idx);
+            }}
           />
         ) : currentSystem && (
           <SystemTab
@@ -595,6 +716,10 @@ export function ScorecardForm() {
             onItemChange={handleItemChange}
             onAddResident={handleAddResident}
             onRemoveResident={handleRemoveResident}
+            onMarkComplete={handleMarkComplete}
+            onClearComplete={handleClearComplete}
+            onNotesChange={handleNotesChange}
+            currentUserId={user?.id}
             disabled={!isEditable}
           />
         )}
@@ -613,13 +738,13 @@ export function ScorecardForm() {
           </Button>
 
           <div className="text-sm text-gray-500">
-            {isSummaryTab ? 'Summary' : `System ${activeTab + 1} of ${scorecard.systems.length}`}
+            {isSummaryTab ? 'Summary' : `System ${currentSystem?.systemNumber || activeTab + 1} of ${sortedSystems.length}`}
           </div>
 
           <Button
             variant="secondary"
-            onClick={() => setActiveTab(Math.min(8, activeTab + 1))}
-            disabled={activeTab === 8}
+            onClick={() => setActiveTab(Math.min(summaryTabIndex, activeTab + 1))}
+            disabled={isSummaryTab}
           >
             Next
             <ChevronRight className="h-4 w-4 ml-1" />

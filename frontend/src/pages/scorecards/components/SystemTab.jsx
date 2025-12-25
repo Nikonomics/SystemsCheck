@@ -1,8 +1,54 @@
-import { useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, Fragment } from 'react';
+import { CheckCircle, XCircle, User, FileText, Check, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
+import { Button } from '../../../components/ui/Button';
 import { AuditItemRow } from './AuditItemRow';
 import { ResidentsSection } from './ResidentsSection';
 import { ScoreDisplay, calculateSystemTotal } from './ScoreDisplay';
+
+// Natural sort for item numbers like "1", "2", "2a", "2b", "3", etc.
+const sortItemNumber = (a, b) => {
+  const aNum = parseInt(a.itemNumber) || 0;
+  const bNum = parseInt(b.itemNumber) || 0;
+  if (aNum !== bNum) return aNum - bNum;
+  // Same number, sort by suffix (a < b < c, etc.)
+  const aSuffix = a.itemNumber.replace(/^\d+/, '');
+  const bSuffix = b.itemNumber.replace(/^\d+/, '');
+  return aSuffix.localeCompare(bSuffix);
+};
+
+// Section definitions for systems that have groupings
+// Maps systemNumber -> array of sections with starting item numbers
+const systemSections = {
+  2: [
+    { name: "ACCIDENTS (Falls, Incident Reports)", startItem: "1" },
+    { name: "Wandering and Elopement F689", startItem: "11" }
+  ],
+  3: [
+    { name: "SKIN MANAGEMENTS", startItem: "1" }
+  ],
+  4: [
+    { name: "MEDICATION MGMT", startItem: "1" },
+    { name: "PSYCH. MGMT", startItem: "4" },
+    { name: "Weight Loss", startItem: "13" }
+  ],
+  5: [
+    { name: "Infection Control", startItem: "1" }
+  ],
+  6: [
+    { name: "TRANSFER/DISCHARGES", startItem: "1" }
+  ],
+  7: [
+    { name: "ABUSE/ SELF REPORT/ GRIEVANCE REVIEW", startItem: "1" }
+  ]
+};
+
+// Helper to check if an item starts a new section
+const getSectionForItem = (systemNumber, itemNumber) => {
+  const sections = systemSections[systemNumber];
+  if (!sections) return null;
+  return sections.find(s => s.startItem === itemNumber);
+};
 
 // System instructions
 const systemInstructions = {
@@ -16,6 +62,19 @@ const systemInstructions = {
   8: 'Observe call light response, resident appearance, room conditions, dining assistance, staff interactions, and activity engagement. Conduct resident/family satisfaction interviews.',
 };
 
+// Format date for display
+const formatCompletionDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
 /**
  * SystemTab - Full system form with audit items and residents
  */
@@ -24,8 +83,45 @@ export function SystemTab({
   onItemChange,
   onAddResident,
   onRemoveResident,
+  onMarkComplete,
+  onClearComplete,
+  onNotesChange,
+  currentUserId,
   disabled = false,
 }) {
+  // Local state for notes with debounced save
+  const [localNotes, setLocalNotes] = useState(system.notes || '');
+  const [notesSaveStatus, setNotesSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'typing'
+
+  // Sync local notes when system changes (e.g., switching tabs)
+  useEffect(() => {
+    setLocalNotes(system.notes || '');
+    setNotesSaveStatus('saved');
+  }, [system.id, system.notes]);
+
+  // Debounced save for notes
+  useEffect(() => {
+    if (localNotes === (system.notes || '')) {
+      return; // No change
+    }
+
+    setNotesSaveStatus('typing');
+
+    const timeout = setTimeout(() => {
+      if (onNotesChange) {
+        setNotesSaveStatus('saving');
+        onNotesChange(system.systemNumber, localNotes)
+          .then(() => setNotesSaveStatus('saved'))
+          .catch(() => setNotesSaveStatus('saved')); // Reset on error
+      }
+    }, 1500); // 1.5 second debounce
+
+    return () => clearTimeout(timeout);
+  }, [localNotes, system.notes, system.systemNumber, onNotesChange]);
+
+  const handleNotesChange = (e) => {
+    setLocalNotes(e.target.value);
+  };
   // Calculate system total
   const systemTotal = useMemo(() => {
     return calculateSystemTotal(system.items || []);
@@ -60,8 +156,40 @@ export function SystemTab({
 
   const instructions = systemInstructions[system.systemNumber] || '';
 
+  // Check completion status
+  const isMarkedComplete = !!system.completedById;
+  const completedByName = system.completedBy
+    ? `${system.completedBy.firstName} ${system.completedBy.lastName}`
+    : null;
+
   return (
     <div className="space-y-4">
+      {/* Completion status banner */}
+      {isMarkedComplete && (
+        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          <div className="flex items-center text-green-700">
+            <CheckCircle className="h-5 w-5 mr-2" />
+            <span className="font-medium">
+              Completed by {completedByName}
+            </span>
+            <span className="text-green-600 ml-2">
+              on {formatCompletionDate(system.completedAt)}
+            </span>
+          </div>
+          {!disabled && onClearComplete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onClearComplete(system.systemNumber)}
+              className="text-green-700 hover:text-green-800 hover:bg-green-100"
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* System header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
@@ -79,7 +207,7 @@ export function SystemTab({
                 <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                Complete
+                All items scored
               </span>
             ) : (
               <span className="text-gray-400">In progress</span>
@@ -122,17 +250,30 @@ export function SystemTab({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {(system.items || []).map((item, index) => (
-                <AuditItemRow
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  onChange={onItemChange}
-                  disabled={disabled}
-                  onNavigateNext={() => handleNavigateToNextRow(index)}
-                  isLastItem={index === (system.items?.length || 0) - 1}
-                />
-              ))}
+              {[...(system.items || [])]
+                .sort(sortItemNumber)
+                .map((item, index) => {
+                  const section = getSectionForItem(system.systemNumber, item.itemNumber);
+                  return (
+                    <Fragment key={item.id}>
+                      {section && (
+                        <tr className="bg-blue-50">
+                          <td colSpan={7} className="px-3 py-2 text-sm font-semibold text-blue-800 uppercase tracking-wide">
+                            {section.name}
+                          </td>
+                        </tr>
+                      )}
+                      <AuditItemRow
+                        item={item}
+                        index={index}
+                        onChange={onItemChange}
+                        disabled={disabled}
+                        onNavigateNext={() => handleNavigateToNextRow(index)}
+                        isLastItem={index === (system.items?.length || 0) - 1}
+                      />
+                    </Fragment>
+                  );
+                })}
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
@@ -156,6 +297,61 @@ export function SystemTab({
         onRemove={(residentId) => onRemoveResident(system.id, residentId)}
         disabled={disabled}
       />
+
+      {/* Auditor Notes section */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="flex items-center text-sm font-medium text-gray-700">
+              <FileText className="h-4 w-4 mr-2 text-gray-400" />
+              Auditor Notes
+            </label>
+            <div className="text-xs text-gray-500">
+              {notesSaveStatus === 'typing' && (
+                <span className="text-gray-400">Typing...</span>
+              )}
+              {notesSaveStatus === 'saving' && (
+                <span className="flex items-center text-gray-500">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Saving...
+                </span>
+              )}
+              {notesSaveStatus === 'saved' && localNotes && (
+                <span className="flex items-center text-green-600">
+                  <Check className="h-3 w-3 mr-1" />
+                  Saved
+                </span>
+              )}
+            </div>
+          </div>
+          <textarea
+            value={localNotes}
+            onChange={handleNotesChange}
+            disabled={disabled}
+            placeholder="Add notes about this system review..."
+            rows={3}
+            className={`
+              w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
+              focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+              placeholder:text-gray-400 resize-y
+              ${disabled ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}
+            `}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Mark as Complete button */}
+      {!disabled && !isMarkedComplete && onMarkComplete && (
+        <div className="flex justify-end pt-4 border-t border-gray-200">
+          <Button
+            onClick={() => onMarkComplete(system.systemNumber)}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Mark System as Complete
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

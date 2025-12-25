@@ -58,6 +58,21 @@ const ScorecardSystem = sequelize.define('ScorecardSystem', {
     type: DataTypes.DATE,
     allowNull: true,
     field: 'last_edited_at'
+  },
+  // Per-system completion tracking (different auditor can complete each system)
+  completedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'completed_by_id',
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'completed_at'
   }
 }, {
   tableName: 'scorecard_systems',

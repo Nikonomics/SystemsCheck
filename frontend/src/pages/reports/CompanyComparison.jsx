@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   TrendingUp,
@@ -8,6 +8,7 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
+  MapPin,
 } from 'lucide-react';
 import {
   BarChart,
@@ -23,6 +24,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import { Button } from '../../components/ui/Button';
 import { reportsApi } from '../../api/reports';
 
+// US State names for display
+const stateNames = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia',
+};
+
 const dateRangeOptions = [
   { value: '3', label: 'Last 3 Months' },
   { value: '6', label: 'Last 6 Months' },
@@ -36,14 +52,14 @@ function TrendIcon({ trend }) {
 }
 
 function getBarColor(score) {
-  if (score >= 720) return '#22c55e';
-  if (score >= 560) return '#eab308';
+  if (score >= 630) return '#22c55e';  // 90% of 700
+  if (score >= 490) return '#eab308';  // 70% of 700
   return '#ef4444';
 }
 
 function getScoreClass(score) {
-  if (score >= 720) return 'text-green-600';
-  if (score >= 560) return 'text-yellow-600';
+  if (score >= 630) return 'text-green-600';  // 90% of 700
+  if (score >= 490) return 'text-yellow-600'; // 70% of 700
   return 'text-red-600';
 }
 
@@ -54,17 +70,36 @@ function getCompletionClass(rate) {
 }
 
 export function CompanyComparison() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [dateRange, setDateRange] = useState('6');
-  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    date_range: searchParams.get('date_range') || '6',
+    state: searchParams.get('state') || '',
+  });
+  const [stateOptions, setStateOptions] = useState([]);
+  const [showFilters, setShowFilters] = useState(!!searchParams.get('state'));
 
+  // Load state options
+  useEffect(() => {
+    const loadStates = async () => {
+      try {
+        const result = await reportsApi.getStates();
+        setStateOptions(result.states || []);
+      } catch (err) {
+        console.error('Error loading states:', err);
+      }
+    };
+    loadStates();
+  }, []);
+
+  // Load data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const result = await reportsApi.getCompanies({ date_range: dateRange });
+        const result = await reportsApi.getCompanies(filters);
         setData(result);
       } catch (err) {
         console.error('Error loading company data:', err);
@@ -74,7 +109,18 @@ export function CompanyComparison() {
       }
     };
     loadData();
-  }, [dateRange]);
+  }, [filters]);
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    const newParams = new URLSearchParams(searchParams);
+    if (value) {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+    setSearchParams(newParams);
+  };
 
   if (loading) {
     return (
@@ -129,20 +175,56 @@ export function CompanyComparison() {
       {showFilters && (
         <Card>
           <CardContent className="p-4">
-            <div className="w-48">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date Range
-              </label>
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {dateRangeOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+            <div className="flex flex-wrap gap-4">
+              <div className="w-48">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <MapPin className="h-3 w-3 inline mr-1" />
+                  State
+                </label>
+                <select
+                  value={filters.state}
+                  onChange={(e) => handleFilterChange('state', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">All States</option>
+                  {stateOptions.map(s => (
+                    <option key={s.code} value={s.code}>
+                      {stateNames[s.code] || s.code} ({s.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-48">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date Range
+                </label>
+                <select
+                  value={filters.date_range}
+                  onChange={(e) => handleFilterChange('date_range', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {dateRangeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+            {/* Active filter indicator */}
+            {filters.state && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500">Filtering by:</span>
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {stateNames[filters.state] || filters.state}
+                  <button
+                    onClick={() => handleFilterChange('state', '')}
+                    className="ml-1 text-blue-600 hover:text-blue-800"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -168,7 +250,7 @@ export function CompanyComparison() {
                     textAnchor="end"
                     height={80}
                   />
-                  <YAxis domain={[0, 800]} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 700]} tick={{ fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;

@@ -12,6 +12,7 @@ const facilityRoutes = require('./routes/facilities');
 const reportRoutes = require('./routes/reports');
 const organizationRoutes = require('./routes/organization');
 const importRoutes = require('./routes/import');
+const templateRoutes = require('./routes/template');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -58,6 +59,7 @@ app.use('/api', facilityRoutes);
 app.use('/api', reportRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/admin/template', templateRoutes);
 
 // Database sync and server start
 async function startServer() {

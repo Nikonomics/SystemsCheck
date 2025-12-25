@@ -1,18 +1,18 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-const ScorecardItem = sequelize.define('ScorecardItem', {
+const AuditTemplateItem = sequelize.define('AuditTemplateItem', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  scorecardSystemId: {
+  templateSystemId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    field: 'scorecard_system_id',
+    field: 'template_system_id',
     references: {
-      model: 'scorecard_systems',
+      model: 'audit_template_systems',
       key: 'id'
     }
   },
@@ -21,39 +21,42 @@ const ScorecardItem = sequelize.define('ScorecardItem', {
     allowNull: false,
     field: 'item_number'
   },
-  criteriaText: {
+  text: {
     type: DataTypes.TEXT,
-    allowNull: false,
-    field: 'criteria_text'
+    allowNull: false
   },
   maxPoints: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
     field: 'max_points'
   },
-  chartsMet: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    field: 'charts_met'
-  },
   sampleSize: {
     type: DataTypes.INTEGER,
-    allowNull: true,
+    allowNull: false,
+    defaultValue: 3,
     field: 'sample_size'
   },
-  pointsEarned: {
+  multiplier: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
-    field: 'points_earned'
+    allowNull: false,
+    defaultValue: 1
   },
-  notes: {
-    type: DataTypes.TEXT,
-    allowNull: true
+  inputType: {
+    type: DataTypes.ENUM('binary', 'sample'),
+    allowNull: false,
+    defaultValue: 'sample',
+    field: 'input_type'
+  },
+  sortOrder: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'sort_order'
   }
 }, {
-  tableName: 'scorecard_items',
+  tableName: 'audit_template_items',
   timestamps: true,
   underscored: true
 });
 
-module.exports = ScorecardItem;
+module.exports = AuditTemplateItem;

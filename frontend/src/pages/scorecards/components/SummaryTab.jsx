@@ -74,8 +74,8 @@ export function SummaryTab({ systems, onNavigateToSystem }) {
 
     return {
       totalScore,
-      maxScore: 800,
-      percentage: Math.round((totalScore / 800) * 1000) / 10,
+      maxScore: 700,
+      percentage: Math.round((totalScore / 700) * 1000) / 10,
       totalItems,
       completedItems,
       systemScores,
@@ -110,7 +110,7 @@ export function SummaryTab({ systems, onNavigateToSystem }) {
                 <span className={`text-5xl font-bold ${mainScoreColor.text}`}>
                   {stats.totalScore.toFixed(0)}
                 </span>
-                <span className="text-2xl text-gray-400">/ 800</span>
+                <span className="text-2xl text-gray-400">/ 700</span>
                 <span className={`text-xl font-medium ${mainScoreColor.text}`}>
                   ({stats.percentage}%)
                 </span>
@@ -127,10 +127,10 @@ export function SummaryTab({ systems, onNavigateToSystem }) {
               </div>
               <div className="flex justify-between mt-1 text-xs text-gray-500">
                 <span>0</span>
-                <span>200</span>
-                <span>400</span>
-                <span>600</span>
-                <span>800</span>
+                <span>175</span>
+                <span>350</span>
+                <span>525</span>
+                <span>700</span>
               </div>
             </div>
           </div>

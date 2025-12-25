@@ -12,6 +12,7 @@ import { FacilityList } from './pages/facilities/FacilityList';
 import { FacilityDetail } from './pages/facilities/FacilityDetail';
 
 // Lazy-loaded pages for code splitting
+const ScorecardsList = lazy(() => import('./pages/scorecards/ScorecardsList').then(m => ({ default: m.ScorecardsList })));
 const ScorecardForm = lazy(() => import('./pages/scorecards/ScorecardForm').then(m => ({ default: m.ScorecardForm })));
 const ScorecardView = lazy(() => import('./pages/scorecards/ScorecardView').then(m => ({ default: m.ScorecardView })));
 const TeamComparison = lazy(() => import('./pages/reports/TeamComparison').then(m => ({ default: m.TeamComparison })));
@@ -23,6 +24,7 @@ const OrganizationManagement = lazy(() => import('./pages/admin/OrganizationMana
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const UserProfile = lazy(() => import('./pages/profile/UserProfile'));
 const HistoricalImport = lazy(() => import('./pages/admin/HistoricalImport').then(m => ({ default: m.HistoricalImport })));
+const TemplateEditor = lazy(() => import('./pages/admin/TemplateEditor'));
 
 // Loading fallback component
 function PageLoader() {
@@ -52,7 +54,7 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/scorecards" element={<PlaceholderPage title="Scorecards" />} />
+            <Route path="/scorecards" element={<Suspense fallback={<PageLoader />}><ScorecardsList /></Suspense>} />
             <Route path="/scorecards/:id" element={<Suspense fallback={<PageLoader />}><ScorecardView /></Suspense>} />
             <Route path="/scorecards/:id/edit" element={<Suspense fallback={<PageLoader />}><ScorecardForm /></Suspense>} />
             <Route path="/facilities" element={<FacilityList />} />
@@ -92,6 +94,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Suspense fallback={<PageLoader />}><HistoricalImport /></Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/template"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<PageLoader />}><TemplateEditor /></Suspense>
                 </ProtectedRoute>
               }
             />

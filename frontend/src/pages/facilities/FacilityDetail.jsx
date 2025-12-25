@@ -9,6 +9,8 @@ import {
   Target,
   Eye,
   Pencil,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   LineChart,
@@ -20,7 +22,9 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { facilitiesApi } from '../../api/facilities';
+import { scorecardsApi } from '../../api/scorecards';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 
@@ -54,6 +58,8 @@ export function FacilityDetail() {
   const [error, setError] = useState(null);
   const [scorecardPage, setScorecardPage] = useState(1);
   const [scorecardPagination, setScorecardPagination] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ open: false, scorecard: null });
+  const [deleting, setDeleting] = useState(false);
 
   // Load facility data
   useEffect(() => {
@@ -94,6 +100,39 @@ export function FacilityDetail() {
       setScorecardPage(nextPage);
     } catch (err) {
       console.error('Error loading more scorecards:', err);
+    }
+  };
+
+  // Delete scorecard handler
+  const handleDeleteScorecard = async () => {
+    if (!deleteModal.scorecard) return;
+
+    setDeleting(true);
+    try {
+      await scorecardsApi.delete(deleteModal.scorecard.id);
+
+      // Remove from list
+      setScorecards(prev => prev.filter(sc => sc.id !== deleteModal.scorecard.id));
+
+      // If this was the current month scorecard, clear it
+      if (currentMonthScorecard?.id === deleteModal.scorecard.id) {
+        setCurrentMonthScorecard(null);
+      }
+
+      // Update stats if needed
+      if (stats) {
+        setStats(prev => ({
+          ...prev,
+          totalScorecards: (prev.totalScorecards || 1) - 1,
+        }));
+      }
+
+      setDeleteModal({ open: false, scorecard: null });
+    } catch (err) {
+      console.error('Error deleting scorecard:', err);
+      alert(err.response?.data?.message || 'Failed to delete scorecard');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -181,7 +220,7 @@ export function FacilityDetail() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Average Score</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {stats?.averageScore ? `${stats.averageScore}/800` : 'N/A'}
+                  {stats?.averageScore ? `${stats.averageScore}/700` : 'N/A'}
                 </p>
               </div>
             </div>
@@ -197,7 +236,7 @@ export function FacilityDetail() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Highest Score</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {stats?.highestScore ? `${stats.highestScore}/800` : 'N/A'}
+                  {stats?.highestScore ? `${stats.highestScore}/700` : 'N/A'}
                 </p>
               </div>
             </div>
@@ -213,7 +252,7 @@ export function FacilityDetail() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Lowest Score</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {stats?.lowestScore ? `${stats.lowestScore}/800` : 'N/A'}
+                  {stats?.lowestScore ? `${stats.lowestScore}/700` : 'N/A'}
                 </p>
               </div>
             </div>
@@ -261,8 +300,8 @@ export function FacilityDetail() {
                     stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
-                    domain={[0, 800]}
-                    ticks={[0, 200, 400, 600, 800]}
+                    domain={[0, 700]}
+                    ticks={[0, 100, 200, 300, 400, 500, 600, 700]}
                   />
                   <Tooltip
                     contentStyle={{
@@ -270,7 +309,7 @@ export function FacilityDetail() {
                       border: '1px solid #e5e7eb',
                       borderRadius: '8px',
                     }}
-                    formatter={(value) => [`${value}/800`, 'Score']}
+                    formatter={(value) => [`${value}/700`, 'Score']}
                   />
                   <Line
                     type="monotone"
@@ -335,30 +374,50 @@ export function FacilityDetail() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {scorecard.totalScore || 0}/800
+                          {scorecard.totalScore || 0}/700
                         </div>
                         <div className="text-xs text-gray-500">
-                          {((parseFloat(scorecard.totalScore) || 0) / 800 * 100).toFixed(1)}%
+                          {((parseFloat(scorecard.totalScore) || 0) / 700 * 100).toFixed(1)}%
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500">
-                          {new Date(scorecard.updatedAt).toLocaleDateString()}
+                          {scorecard.updatedAt
+                            ? new Date(scorecard.updatedAt).toLocaleDateString()
+                            : scorecard.createdAt
+                              ? new Date(scorecard.createdAt).toLocaleDateString()
+                              : '—'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex justify-end gap-2">
                           <Link to={`/scorecards/${scorecard.id}`}>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" title="View">
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
-                          {scorecard.status === 'draft' && (
+                          {(scorecard.status === 'draft' || scorecard.status === 'trial_close') && (
                             <Link to={`/scorecards/${scorecard.id}/edit`}>
-                              <Button variant="ghost" size="sm">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title={scorecard.status === 'trial_close' ? 'Complete Audit' : 'Edit'}
+                                className={scorecard.status === 'trial_close' ? 'text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50' : ''}
+                              >
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             </Link>
+                          )}
+                          {scorecard.status !== 'hard_close' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Delete"
+                              onClick={() => setDeleteModal({ open: true, scorecard })}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -379,6 +438,50 @@ export function FacilityDetail() {
           </div>
         )}
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, scorecard: null })}
+        title="Delete Scorecard"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 p-2 bg-red-100 rounded-full">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-gray-700">
+                Are you sure you want to delete the scorecard for{' '}
+                <strong>
+                  {deleteModal.scorecard && `${monthNames[deleteModal.scorecard.month - 1]} ${deleteModal.scorecard.year}`}
+                </strong>
+                ?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                This action cannot be undone. All data including system scores, item responses, and resident information will be permanently deleted.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteModal({ open: false, scorecard: null })}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteScorecard}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Scorecard'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -7,8 +7,40 @@ const {
   Team,
   Company,
   Scorecard,
+  ScorecardSystem,
   UserFacility,
 } = require('../models');
+
+// Helper to get user's team/company from their assigned facilities
+async function getUserTeamAndCompany(userId) {
+  const assignments = await UserFacility.findAll({
+    where: { userId },
+    attributes: ['facilityId'],
+  });
+
+  if (assignments.length === 0) {
+    return { teamId: null, companyId: null };
+  }
+
+  const facilityIds = assignments.map(a => a.facilityId);
+  const facility = await Facility.findOne({
+    where: { id: { [Op.in]: facilityIds } },
+    include: [{
+      model: Team,
+      as: 'team',
+      include: [{ model: Company, as: 'company' }],
+    }],
+  });
+
+  if (!facility || !facility.team) {
+    return { teamId: null, companyId: null };
+  }
+
+  return {
+    teamId: facility.team.id,
+    companyId: facility.team.company?.id || null,
+  };
+}
 
 /**
  * GET /api/facilities
@@ -60,16 +92,22 @@ router.get('/facilities', authenticateToken, async (req, res) => {
         });
       }
     } else if (user.role === 'team_leader') {
-      // Facilities in user's team
-      teamWhere.id = user.teamId;
+      // Facilities in user's team (derive from assigned facilities)
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (userContext.teamId) {
+        teamWhere.id = userContext.teamId;
+      }
     } else if (user.role === 'company_leader') {
-      // Facilities in user's company
-      const teams = await Team.findAll({
-        where: { companyId: user.companyId },
-        attributes: ['id'],
-      });
-      const teamIds = teams.map(t => t.id);
-      where.teamId = { [Op.in]: teamIds };
+      // Facilities in user's company (derive from assigned facilities)
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (userContext.companyId) {
+        const teams = await Team.findAll({
+          where: { companyId: userContext.companyId },
+          attributes: ['id'],
+        });
+        const teamIds = teams.map(t => t.id);
+        where.teamId = { [Op.in]: teamIds };
+      }
     }
     // admin and corporate can see all facilities
 
@@ -172,11 +210,14 @@ router.get('/facilities/filters', authenticateToken, async (req, res) => {
     let teamWhere = {};
 
     // Role-based filtering for available options
-    if (user.role === 'team_leader') {
-      teamWhere.id = user.teamId;
-      companyWhere.id = user.companyId;
-    } else if (user.role === 'company_leader') {
-      companyWhere.id = user.companyId;
+    if (user.role === 'team_leader' || user.role === 'company_leader') {
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (user.role === 'team_leader') {
+        if (userContext.teamId) teamWhere.id = userContext.teamId;
+        if (userContext.companyId) companyWhere.id = userContext.companyId;
+      } else if (user.role === 'company_leader') {
+        if (userContext.companyId) companyWhere.id = userContext.companyId;
+      }
     }
     // admin and corporate can see all
 
@@ -240,11 +281,13 @@ router.get('/facilities/:id', authenticateToken, async (req, res) => {
         return res.status(403).json({ message: 'Access denied' });
       }
     } else if (user.role === 'team_leader') {
-      if (facility.team.id !== user.teamId) {
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (facility.team.id !== userContext.teamId) {
         return res.status(403).json({ message: 'Access denied' });
       }
     } else if (user.role === 'company_leader') {
-      if (facility.team.companyId !== user.companyId) {
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (facility.team.companyId !== userContext.companyId) {
         return res.status(403).json({ message: 'Access denied' });
       }
     }
@@ -267,12 +310,23 @@ router.get('/facilities/:id', authenticateToken, async (req, res) => {
         ],
       },
       attributes: ['id', 'month', 'year', 'status', 'totalScore', 'updatedAt'],
+      include: [{
+        model: ScorecardSystem,
+        as: 'systems',
+        attributes: ['totalPointsEarned'],
+      }],
       order: [['year', 'DESC'], ['month', 'DESC']],
     });
 
-    // Calculate stats
+    // Calculate stats - calculate from systems if totalScore is 0
     const completedScorecards = scorecards.filter(s => s.status === 'hard_close');
-    const scores = completedScorecards.map(s => parseFloat(s.totalScore) || 0);
+    const scores = completedScorecards.map(s => {
+      let score = parseFloat(s.totalScore) || 0;
+      if (score === 0 && s.systems && s.systems.length > 0) {
+        score = s.systems.reduce((sum, sys) => sum + (parseFloat(sys.totalPointsEarned) || 0), 0);
+      }
+      return score;
+    });
 
     const stats = {
       averageScore: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10 : null,
@@ -338,14 +392,36 @@ router.get('/facilities/:id/scorecards', authenticateToken, async (req, res) => 
 
     const { rows: scorecards, count: total } = await Scorecard.findAndCountAll({
       where: { facilityId: id },
-      attributes: ['id', 'month', 'year', 'status', 'totalScore', 'updatedAt'],
+      attributes: ['id', 'month', 'year', 'status', 'totalScore', 'createdAt', 'updatedAt'],
+      include: [{
+        model: ScorecardSystem,
+        as: 'systems',
+        attributes: ['totalPointsEarned'],
+      }],
       order: [['year', 'DESC'], ['month', 'DESC']],
       limit: parseInt(limit),
       offset,
     });
 
+    // Calculate score from systems if totalScore is 0
+    const formattedScorecards = scorecards.map(sc => {
+      let calculatedScore = parseFloat(sc.totalScore) || 0;
+      if (calculatedScore === 0 && sc.systems && sc.systems.length > 0) {
+        calculatedScore = sc.systems.reduce((sum, sys) => sum + (parseFloat(sys.totalPointsEarned) || 0), 0);
+      }
+      return {
+        id: sc.id,
+        month: sc.month,
+        year: sc.year,
+        status: sc.status,
+        totalScore: calculatedScore,
+        createdAt: sc.createdAt,
+        updatedAt: sc.updatedAt,
+      };
+    });
+
     res.json({
-      scorecards,
+      scorecards: formattedScorecards,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -376,6 +452,11 @@ router.get('/facilities/:id/trend', authenticateToken, async (req, res) => {
     const scorecards = await Scorecard.findAll({
       where: { facilityId: id },
       attributes: ['month', 'year', 'status', 'totalScore'],
+      include: [{
+        model: ScorecardSystem,
+        as: 'systems',
+        attributes: ['totalPointsEarned'],
+      }],
       order: [['year', 'ASC'], ['month', 'ASC']],
       limit: 12,
     });
@@ -383,11 +464,18 @@ router.get('/facilities/:id/trend', authenticateToken, async (req, res) => {
     // Format for chart
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    const trendData = scorecards.map(sc => ({
-      month: `${monthNames[sc.month - 1]} ${sc.year}`,
-      score: parseFloat(sc.totalScore) || 0,
-      status: sc.status,
-    }));
+    const trendData = scorecards.map(sc => {
+      // Calculate score from systems if totalScore is 0
+      let calculatedScore = parseFloat(sc.totalScore) || 0;
+      if (calculatedScore === 0 && sc.systems && sc.systems.length > 0) {
+        calculatedScore = sc.systems.reduce((sum, sys) => sum + (parseFloat(sys.totalPointsEarned) || 0), 0);
+      }
+      return {
+        month: `${monthNames[sc.month - 1]} ${sc.year}`,
+        score: calculatedScore,
+        status: sc.status,
+      };
+    });
 
     res.json({ trendData });
   } catch (error) {

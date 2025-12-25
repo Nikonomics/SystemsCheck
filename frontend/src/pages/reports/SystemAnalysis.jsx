@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   TrendingUp,
@@ -10,6 +10,7 @@ import {
   ChevronUp,
   AlertTriangle,
   Target,
+  MapPin,
 } from 'lucide-react';
 import {
   BarChart,
@@ -26,6 +27,21 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { reportsApi } from '../../api/reports';
 import { facilitiesApi } from '../../api/facilities';
+
+// US State names for display
+const stateNames = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia',
+};
 
 const dateRangeOptions = [
   { value: '3', label: 'Last 3 Months' },
@@ -69,23 +85,31 @@ function getScoreTextClass(score) {
 }
 
 export function SystemAnalysis() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
-    company_id: '',
-    team_id: '',
-    date_range: '6',
+    company_id: searchParams.get('company_id') || '',
+    team_id: searchParams.get('team_id') || '',
+    date_range: searchParams.get('date_range') || '6',
+    state: searchParams.get('state') || '',
   });
-  const [filterOptions, setFilterOptions] = useState({ companies: [], teams: [] });
-  const [showFilters, setShowFilters] = useState(false);
+  const [filterOptions, setFilterOptions] = useState({ companies: [], teams: [], states: [] });
+  const [showFilters, setShowFilters] = useState(!!searchParams.get('state'));
 
   // Load filter options
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const options = await facilitiesApi.getFilters();
-        setFilterOptions(options);
+        const [options, stateOptions] = await Promise.all([
+          facilitiesApi.getFilters(),
+          reportsApi.getStates()
+        ]);
+        setFilterOptions({
+          ...options,
+          states: stateOptions.states || []
+        });
       } catch (err) {
         console.error('Error loading filter options:', err);
       }
@@ -112,6 +136,13 @@ export function SystemAnalysis() {
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+    const newParams = new URLSearchParams(searchParams);
+    if (value) {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+    setSearchParams(newParams);
   };
 
   // Get filtered teams based on company selection
@@ -220,6 +251,24 @@ export function SystemAnalysis() {
               </div>
               <div className="w-48">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <MapPin className="h-3 w-3 inline mr-1" />
+                  State
+                </label>
+                <select
+                  value={filters.state}
+                  onChange={(e) => handleFilterChange('state', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">All States</option>
+                  {filterOptions.states?.map(s => (
+                    <option key={s.code} value={s.code}>
+                      {stateNames[s.code] || s.code} ({s.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-48">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date Range
                 </label>
                 <select
@@ -233,6 +282,22 @@ export function SystemAnalysis() {
                 </select>
               </div>
             </div>
+            {/* Active filter indicator */}
+            {filters.state && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500">Filtering by:</span>
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {stateNames[filters.state] || filters.state}
+                  <button
+                    onClick={() => handleFilterChange('state', '')}
+                    className="ml-1 text-blue-600 hover:text-blue-800"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

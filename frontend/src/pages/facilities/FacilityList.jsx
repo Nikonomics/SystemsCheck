@@ -253,7 +253,7 @@ export function FacilityList() {
                             </Badge>
                             {facility.latestScorecard && (
                               <span className="text-sm font-medium text-gray-900">
-                                {facility.latestScorecard.totalScore || 0}/800
+                                {facility.latestScorecard.totalScore || 0}/700
                               </span>
                             )}
                           </div>

@@ -49,15 +49,17 @@ const monthNames = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const TOTAL_POSSIBLE_SCORE = 700;
+
 function getScoreColor(score) {
-  const pct = (score / 800) * 100;
+  const pct = (score / TOTAL_POSSIBLE_SCORE) * 100;
   if (pct >= 90) return 'text-green-600';
   if (pct >= 70) return 'text-yellow-600';
   return 'text-red-600';
 }
 
 function getScoreBgClass(score) {
-  const pct = (score / 800) * 100;
+  const pct = (score / TOTAL_POSSIBLE_SCORE) * 100;
   if (pct >= 90) return 'bg-green-50 border-green-200';
   if (pct >= 70) return 'bg-yellow-50 border-yellow-200';
   return 'bg-red-50 border-red-200';
@@ -134,7 +136,7 @@ function ClinicalResourceDashboard({ data }) {
                           {statusLabels[facility.currentScorecard.status]}
                         </Badge>
                         <p className={`text-lg font-bold mt-1 ${getScoreColor(facility.currentScorecard.totalScore)}`}>
-                          {facility.currentScorecard.totalScore}/800
+                          {facility.currentScorecard.totalScore}/{TOTAL_POSSIBLE_SCORE}
                         </p>
                       </div>
                       <Link to={`/scorecards/${facility.currentScorecard.id}${facility.currentScorecard.status === 'hard_close' ? '' : '/edit'}`}>
@@ -189,7 +191,7 @@ function ClinicalResourceDashboard({ data }) {
                     {statusLabels[activity.status]}
                   </Badge>
                   <p className={`text-sm font-medium mt-1 ${getScoreColor(activity.totalScore)}`}>
-                    {activity.totalScore}/800
+                    {activity.totalScore}/{TOTAL_POSSIBLE_SCORE}
                   </p>
                 </div>
               </Link>
@@ -230,7 +232,7 @@ function TeamLeaderDashboard({ data }) {
                 <p className="text-sm text-gray-500">Completed</p>
               </div>
               <div>
-                <p className={`text-3xl font-bold ${data.summary?.avgScoreThisMonth >= 720 ? 'text-green-600' : data.summary?.avgScoreThisMonth >= 560 ? 'text-yellow-600' : 'text-red-600'}`}>
+                <p className={`text-3xl font-bold ${data.summary?.avgScoreThisMonth >= 630 ? 'text-green-600' : data.summary?.avgScoreThisMonth >= 490 ? 'text-yellow-600' : 'text-red-600'}`}>
                   {data.summary?.avgScoreThisMonth || '—'}
                 </p>
                 <p className="text-sm text-gray-500">Avg Score</p>
@@ -252,7 +254,7 @@ function TeamLeaderDashboard({ data }) {
                 <LineChart data={data.trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 800]} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, TOTAL_POSSIBLE_SCORE]} tick={{ fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
@@ -349,8 +351,8 @@ function TeamLeaderDashboard({ data }) {
 function CompanyLeaderDashboard({ data }) {
   // Colors for bar chart
   const getBarColor = (score) => {
-    if (score >= 720) return '#22c55e';
-    if (score >= 560) return '#eab308';
+    if (score >= 630) return '#22c55e';
+    if (score >= 490) return '#eab308';
     return '#ef4444';
   };
 
@@ -424,7 +426,7 @@ function CompanyLeaderDashboard({ data }) {
                 <BarChart data={data.teamStats} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 800]} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, TOTAL_POSSIBLE_SCORE]} tick={{ fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
@@ -463,7 +465,7 @@ function CompanyLeaderDashboard({ data }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{team.name}</td>
                     <td className="px-4 py-3 text-center text-sm text-gray-500">{team.facilityCount}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`font-medium ${team.avgScore >= 720 ? 'text-green-600' : team.avgScore >= 560 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      <span className={`font-medium ${team.avgScore >= 630 ? 'text-green-600' : team.avgScore >= 490 ? 'text-yellow-600' : 'text-red-600'}`}>
                         {team.avgScore || '—'}
                       </span>
                     </td>
@@ -495,7 +497,7 @@ function CompanyLeaderDashboard({ data }) {
                   </span>
                   <span className="text-sm font-medium text-gray-900">{f.facilityName}</span>
                 </div>
-                <span className="text-sm font-bold text-green-600">{f.score}/800</span>
+                <span className="text-sm font-bold text-green-600">{f.score}/{TOTAL_POSSIBLE_SCORE}</span>
               </Link>
             ))}
           </div>
@@ -513,7 +515,7 @@ function CompanyLeaderDashboard({ data }) {
                   </span>
                   <span className="text-sm font-medium text-gray-900">{f.facilityName}</span>
                 </div>
-                <span className="text-sm font-bold text-red-600">{f.score}/800</span>
+                <span className="text-sm font-bold text-red-600">{f.score}/{TOTAL_POSSIBLE_SCORE}</span>
               </Link>
             ))}
           </div>
@@ -528,8 +530,8 @@ function CompanyLeaderDashboard({ data }) {
  */
 function CorporateDashboard({ data }) {
   const getBarColor = (score) => {
-    if (score >= 720) return '#22c55e';
-    if (score >= 560) return '#eab308';
+    if (score >= 630) return '#22c55e';
+    if (score >= 490) return '#eab308';
     return '#ef4444';
   };
 
@@ -627,7 +629,7 @@ function CorporateDashboard({ data }) {
                 <BarChart data={data.companyStats} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 800]} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, TOTAL_POSSIBLE_SCORE]} tick={{ fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
@@ -668,7 +670,7 @@ function CorporateDashboard({ data }) {
                     <td className="px-4 py-3 text-center text-sm text-gray-500">{company.teamCount}</td>
                     <td className="px-4 py-3 text-center text-sm text-gray-500">{company.facilityCount}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`font-medium ${company.avgScore >= 720 ? 'text-green-600' : company.avgScore >= 560 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      <span className={`font-medium ${company.avgScore >= 630 ? 'text-green-600' : company.avgScore >= 490 ? 'text-yellow-600' : 'text-red-600'}`}>
                         {company.avgScore || '—'}
                       </span>
                     </td>
@@ -708,7 +710,7 @@ function CorporateDashboard({ data }) {
                   </p>
                 </div>
                 {f.score && (
-                  <span className="text-sm font-bold text-red-600">{f.score}/800</span>
+                  <span className="text-sm font-bold text-red-600">{f.score}/{TOTAL_POSSIBLE_SCORE}</span>
                 )}
               </Link>
             ))}

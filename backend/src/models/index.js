@@ -9,6 +9,9 @@ const ScorecardSystem = require('./ScorecardSystem');
 const ScorecardItem = require('./ScorecardItem');
 const ScorecardResident = require('./ScorecardResident');
 const ScorecardActivityLog = require('./ScorecardActivityLog');
+const AuditTemplate = require('./AuditTemplate');
+const AuditTemplateSystem = require('./AuditTemplateSystem');
+const AuditTemplateItem = require('./AuditTemplateItem');
 
 // Company - Team associations
 Company.hasMany(Team, { foreignKey: 'companyId', as: 'teams' });
@@ -46,6 +49,9 @@ Scorecard.belongsTo(User, { foreignKey: 'trialClosedById', as: 'trialClosedBy' }
 User.hasMany(Scorecard, { foreignKey: 'hardClosedById', as: 'hardClosedScorecards' });
 Scorecard.belongsTo(User, { foreignKey: 'hardClosedById', as: 'hardClosedBy' });
 
+User.hasMany(Scorecard, { foreignKey: 'updatedById', as: 'updatedScorecards' });
+Scorecard.belongsTo(User, { foreignKey: 'updatedById', as: 'updatedBy' });
+
 // Scorecard - ScorecardSystem associations
 Scorecard.hasMany(ScorecardSystem, { foreignKey: 'scorecardId', as: 'systems' });
 ScorecardSystem.belongsTo(Scorecard, { foreignKey: 'scorecardId', as: 'scorecard' });
@@ -53,6 +59,10 @@ ScorecardSystem.belongsTo(Scorecard, { foreignKey: 'scorecardId', as: 'scorecard
 // User - ScorecardSystem (last edited by)
 User.hasMany(ScorecardSystem, { foreignKey: 'lastEditedById', as: 'editedSystems' });
 ScorecardSystem.belongsTo(User, { foreignKey: 'lastEditedById', as: 'lastEditedBy' });
+
+// User - ScorecardSystem (completed by - different auditor can complete each system)
+User.hasMany(ScorecardSystem, { foreignKey: 'completedById', as: 'completedSystems' });
+ScorecardSystem.belongsTo(User, { foreignKey: 'completedById', as: 'completedBy' });
 
 // ScorecardSystem - ScorecardItem associations
 ScorecardSystem.hasMany(ScorecardItem, { foreignKey: 'scorecardSystemId', as: 'items' });
@@ -70,6 +80,20 @@ ScorecardActivityLog.belongsTo(Scorecard, { foreignKey: 'scorecardId', as: 'scor
 User.hasMany(ScorecardActivityLog, { foreignKey: 'userId', as: 'activityLogs' });
 ScorecardActivityLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
+// AuditTemplate associations
+AuditTemplate.hasMany(AuditTemplateSystem, { foreignKey: 'templateId', as: 'systems', onDelete: 'CASCADE' });
+AuditTemplateSystem.belongsTo(AuditTemplate, { foreignKey: 'templateId', as: 'template' });
+
+AuditTemplateSystem.hasMany(AuditTemplateItem, { foreignKey: 'templateSystemId', as: 'items', onDelete: 'CASCADE' });
+AuditTemplateItem.belongsTo(AuditTemplateSystem, { foreignKey: 'templateSystemId', as: 'system' });
+
+// User - AuditTemplate associations
+User.hasMany(AuditTemplate, { foreignKey: 'createdById', as: 'createdTemplates' });
+AuditTemplate.belongsTo(User, { foreignKey: 'createdById', as: 'createdBy' });
+
+User.hasMany(AuditTemplate, { foreignKey: 'updatedById', as: 'updatedTemplates' });
+AuditTemplate.belongsTo(User, { foreignKey: 'updatedById', as: 'updatedBy' });
+
 module.exports = {
   sequelize,
   Company,
@@ -81,5 +105,8 @@ module.exports = {
   ScorecardSystem,
   ScorecardItem,
   ScorecardResident,
-  ScorecardActivityLog
+  ScorecardActivityLog,
+  AuditTemplate,
+  AuditTemplateSystem,
+  AuditTemplateItem
 };

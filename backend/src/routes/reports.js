@@ -48,6 +48,85 @@ function calculateScoreFromItems(items) {
   }, 0);
 }
 
+// Helper to get user's team/company from their assigned facilities
+async function getUserTeamAndCompany(userId) {
+  const assignments = await UserFacility.findAll({
+    where: { userId },
+    attributes: ['facilityId'],
+  });
+
+  if (assignments.length === 0) {
+    return { teamId: null, companyId: null, team: null, company: null };
+  }
+
+  const facilityIds = assignments.map(a => a.facilityId);
+  const facility = await Facility.findOne({
+    where: { id: { [Op.in]: facilityIds } },
+    include: [{
+      model: Team,
+      as: 'team',
+      include: [{ model: Company, as: 'company' }],
+    }],
+  });
+
+  if (!facility || !facility.team) {
+    return { teamId: null, companyId: null, team: null, company: null };
+  }
+
+  return {
+    teamId: facility.team.id,
+    companyId: facility.team.company?.id || null,
+    team: facility.team,
+    company: facility.team.company,
+  };
+}
+
+/**
+ * GET /api/reports/states
+ * Get list of states that have facilities (for filter dropdown)
+ */
+router.get('/reports/states', authenticateToken, async (req, res) => {
+  try {
+    const states = await Facility.findAll({
+      where: {
+        isActive: true,
+        state: { [Op.ne]: null }
+      },
+      attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('state')), 'state']],
+      order: [['state', 'ASC']],
+      raw: true
+    });
+
+    // Get facility count per state
+    const stateCounts = await Facility.findAll({
+      where: {
+        isActive: true,
+        state: { [Op.ne]: null }
+      },
+      attributes: [
+        'state',
+        [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+      ],
+      group: ['state'],
+      order: [['state', 'ASC']],
+      raw: true
+    });
+
+    const stateList = states.map(s => {
+      const countInfo = stateCounts.find(c => c.state === s.state);
+      return {
+        code: s.state,
+        count: countInfo ? parseInt(countInfo.count) : 0
+      };
+    });
+
+    res.json({ states: stateList });
+  } catch (error) {
+    console.error('Error fetching states:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 /**
  * GET /api/reports/dashboard
  * Returns role-appropriate dashboard data
@@ -89,11 +168,27 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
           year: currentYear,
         },
         attributes: ['id', 'facilityId', 'status', 'totalScore', 'updatedAt'],
+        include: [{
+          model: ScorecardSystem,
+          as: 'systems',
+          attributes: ['totalPointsEarned'],
+        }],
       });
 
       const scorecardMap = {};
       scorecards.forEach(sc => {
-        scorecardMap[sc.facilityId] = sc;
+        // Calculate score from systems if totalScore is 0 or null
+        let calculatedScore = parseFloat(sc.totalScore) || 0;
+        if (calculatedScore === 0 && sc.systems && sc.systems.length > 0) {
+          calculatedScore = sc.systems.reduce((sum, sys) => sum + (parseFloat(sys.totalPointsEarned) || 0), 0);
+        }
+        scorecardMap[sc.facilityId] = {
+          id: sc.id,
+          facilityId: sc.facilityId,
+          status: sc.status,
+          totalScore: calculatedScore,
+          updatedAt: sc.updatedAt,
+        };
       });
 
       // Format facilities with scorecard status
@@ -143,14 +238,17 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
         })),
       };
     } else if (user.role === 'team_leader') {
-      // Get team info
-      const team = await Team.findByPk(user.teamId, {
-        include: [{ model: Company, as: 'company' }],
-      });
+      // Get team info from user's assigned facilities
+      const userContext = await getUserTeamAndCompany(user.id);
+      const team = userContext.team;
+
+      if (!team) {
+        return res.status(400).json({ message: 'Team leader has no assigned facilities or team' });
+      }
 
       // Get all facilities in team
       const facilities = await Facility.findAll({
-        where: { teamId: user.teamId, isActive: true },
+        where: { teamId: team.id, isActive: true },
         order: [['name', 'ASC']],
       });
 
@@ -240,12 +338,17 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
         trendData,
       };
     } else if (user.role === 'company_leader') {
-      // Get company info
-      const company = await Company.findByPk(user.companyId);
+      // Get company info from user's assigned facilities
+      const userContext = await getUserTeamAndCompany(user.id);
+      const company = userContext.company;
+
+      if (!company) {
+        return res.status(400).json({ message: 'Company leader has no assigned facilities or company' });
+      }
 
       // Get all teams in company
       const teams = await Team.findAll({
-        where: { companyId: user.companyId },
+        where: { companyId: company.id },
         include: [{
           model: Facility,
           as: 'facilities',
@@ -489,11 +592,11 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
 /**
  * GET /api/reports/teams
  * Team comparison data
- * Query: company_id, date_range (3, 6, 12)
+ * Query: company_id, date_range (3, 6, 12), state (2-letter state code)
  */
 router.get('/reports/teams', authenticateToken, async (req, res) => {
   try {
-    const { company_id, date_range = '6' } = req.query;
+    const { company_id, date_range = '6', state } = req.query;
     const user = req.user;
     const dateFilter = getDateRangeFilter(date_range);
 
@@ -502,10 +605,21 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
     if (company_id) {
       teamWhere.companyId = parseInt(company_id);
     }
-    if (user.role === 'team_leader') {
-      teamWhere.id = user.teamId;
-    } else if (user.role === 'company_leader') {
-      teamWhere.companyId = user.companyId;
+
+    // For team_leader and company_leader, derive context from assigned facilities
+    if (user.role === 'team_leader' || user.role === 'company_leader') {
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (user.role === 'team_leader' && userContext.teamId) {
+        teamWhere.id = userContext.teamId;
+      } else if (user.role === 'company_leader' && userContext.companyId) {
+        teamWhere.companyId = userContext.companyId;
+      }
+    }
+
+    // Build facility filter with state
+    let facilityWhere = { isActive: true };
+    if (state) {
+      facilityWhere.state = state.toUpperCase();
     }
 
     const teams = await Team.findAll({
@@ -515,7 +629,7 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
         {
           model: Facility,
           as: 'facilities',
-          where: { isActive: true },
+          where: facilityWhere,
           required: false,
         },
       ],
@@ -609,17 +723,23 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
 /**
  * GET /api/reports/companies
  * Company comparison data
- * Query: date_range (3, 6, 12)
+ * Query: date_range (3, 6, 12), state (2-letter state code)
  */
 router.get('/reports/companies', authenticateToken, async (req, res) => {
   try {
-    const { date_range = '6' } = req.query;
+    const { date_range = '6', state } = req.query;
     const user = req.user;
     const dateFilter = getDateRangeFilter(date_range);
 
     // Check access
     if (!['corporate', 'admin'].includes(user.role)) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Build facility filter with state
+    let facilityWhere = { isActive: true };
+    if (state) {
+      facilityWhere.state = state.toUpperCase();
     }
 
     const companies = await Company.findAll({
@@ -629,7 +749,7 @@ router.get('/reports/companies', authenticateToken, async (req, res) => {
         include: [{
           model: Facility,
           as: 'facilities',
-          where: { isActive: true },
+          where: facilityWhere,
           required: false,
         }],
       }],
@@ -841,11 +961,11 @@ router.get('/reports/facilities/compare', authenticateToken, async (req, res) =>
 /**
  * GET /api/reports/systems
  * System-by-system analysis across all facilities
- * Query: company_id, team_id, date_range
+ * Query: company_id, team_id, date_range, state (2-letter state code)
  */
 router.get('/reports/systems', authenticateToken, async (req, res) => {
   try {
-    const { company_id, team_id, date_range = '6' } = req.query;
+    const { company_id, team_id, date_range = '6', state } = req.query;
     const user = req.user;
     const dateFilter = getDateRangeFilter(date_range);
 
@@ -859,12 +979,18 @@ router.get('/reports/systems', authenticateToken, async (req, res) => {
     if (company_id) {
       teamWhere.companyId = parseInt(company_id);
     }
+    if (state) {
+      facilityWhere.state = state.toUpperCase();
+    }
 
-    // Role-based filtering
-    if (user.role === 'team_leader') {
-      facilityWhere.teamId = user.teamId;
-    } else if (user.role === 'company_leader') {
-      teamWhere.companyId = user.companyId;
+    // Role-based filtering - derive context from assigned facilities
+    if (user.role === 'team_leader' || user.role === 'company_leader') {
+      const userContext = await getUserTeamAndCompany(user.id);
+      if (user.role === 'team_leader' && userContext.teamId) {
+        facilityWhere.teamId = userContext.teamId;
+      } else if (user.role === 'company_leader' && userContext.companyId) {
+        teamWhere.companyId = userContext.companyId;
+      }
     }
 
     const facilities = await Facility.findAll({

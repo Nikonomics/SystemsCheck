@@ -5,126 +5,106 @@ const {
   Team,
   Facility,
   User,
-  UserFacility
+  UserFacility,
+  AuditTemplate,
+  AuditTemplateSystem,
+  AuditTemplateItem
 } = require('../models');
+const { auditCriteria, getScoredSystems } = require('../data/auditCriteria');
 
-// Organizational data structure
-const organizationData = {
-  Columbia: {
-    teams: {
-      'Pacific Storm': [
-        'Avamere Bellingham Health & Rehab',
-        'Avamere Court at Keizer',
-        'Avamere Crestview of Portland',
-        'Avamere Heritage Rehab of Tacoma',
-        'Avamere Hillsboro',
-        'Avamere Olympic Rehabilitation of Sequim',
-        'Avamere Rehabilitation of Clackamas',
-        'Avamere Transitional Care of Puget Sound'
-      ],
-      'Trail Blazers': [
-        'Avamere Rehabilitation of Beaverton',
-        'Avamere Rehabilitation of Eugene',
-        'Avamere Rehabilitation of King City',
-        'Avamere Rehabilitation of Oregon City'
-      ],
-      'Triple Threat': [
-        'Avamere Rehabilitation of Coos Bay',
-        'Avamere Rehabilitation of Newport',
-        'Avamere Rehabilitation of Rogue Valley'
-      ]
-    }
-  },
-  Envision: {
-    teams: {
-      'Palouse PAC': [
-        'Avamere at Chestnut Lane',
-        'Avamere Rehabilitation of Lewiston',
-        'Avamere Transitional Care & Rehab - Boise',
-        'Avamere Transitional Care & Rehab - Malley'
-      ],
-      Willamette: [
-        'Avamere Rehabilitation of Albany',
-        'Avamere Rehabilitation of Bend',
-        'Avamere Rehabilitation of Cascade Park',
-        'Avamere Rehabilitation of Junction City',
-        'Avamere Rehabilitation of Salem'
-      ]
-    }
-  },
-  'Three Rivers': {
-    teams: {
-      Chinook: [
-        'Avamere Rehabilitation of Burien',
-        'Avamere Rehabilitation of Enumclaw',
-        'Avamere Rehabilitation of Federal Way',
-        'Avamere Rehabilitation of Port Orchard'
-      ],
-      Salmon: [
-        'Avamere Rehabilitation of Issaquah',
-        'Avamere Rehabilitation of Lake Ridge',
-        'Avamere Rehabilitation of Shoreline',
-        'Avamere Skilled Nursing of Tacoma'
-      ]
-    }
-  },
-  Northern: {
-    teams: {
-      Redwoods: [
-        'Avamere Rehabilitation of Eureka',
-        'Avamere Rehabilitation of Humboldt',
-        'Avamere Rehabilitation of Redding'
-      ],
-      Valley: [
-        'Avamere Rehabilitation of Fresno',
-        'Avamere Rehabilitation of Modesto',
-        'Avamere Rehabilitation of Sacramento'
-      ]
-    }
-  },
-  Vincero: {
-    teams: {
-      Horizon: [
-        'Avamere Rehabilitation of Chandler',
-        'Avamere Rehabilitation of Mesa',
-        'Avamere Rehabilitation of Phoenix',
-        'Avamere Rehabilitation of Scottsdale'
-      ],
-      Summit: [
-        'Avamere Rehabilitation of Boulder',
-        'Avamere Rehabilitation of Denver',
-        'Avamere Rehabilitation of Fort Collins',
-        'Avamere Rehabilitation of Lakewood'
-      ]
-    }
-  },
-  Olympus: {
-    teams: {
-      Cascade: [
-        'Avamere Rehabilitation of Bellevue',
-        'Avamere Rehabilitation of Kirkland',
-        'Avamere Rehabilitation of Lynnwood',
-        'Avamere Rehabilitation of Redmond',
-        'Avamere Rehabilitation of Woodinville'
-      ],
-      Peninsula: [
-        'Avamere Rehabilitation of Bainbridge',
-        'Avamere Rehabilitation of Gig Harbor',
-        'Avamere Rehabilitation of Silverdale'
-      ],
-      'Puget Sound': [
-        'Avamere Rehabilitation of Everett',
-        'Avamere Rehabilitation of Marysville',
-        'Avamere Rehabilitation of Mount Vernon'
-      ],
-      'San Juan': [
-        'Avamere Rehabilitation of Anacortes',
-        'Avamere Rehabilitation of Friday Harbor',
-        'Avamere Rehabilitation of Oak Harbor'
-      ]
-    }
-  }
-};
+// Real Cascadia Healthcare facilities from master list
+const facilitiesData = [
+  // Columbia - Pacific Storm
+  { name: "Alderwood Park Health & Rehabilitation", type: "SNF", address: "2726 Alderwood Ave", city: "Bellingham", state: "WA", zip: "98225", company: "Columbia", team: "Pacific Storm", beds: 102 },
+  { name: "Highland Health & Rehabilitation of Cascadia", type: "SNF", address: "2400 Samish Way", city: "Bellingham", state: "WA", zip: "98229", company: "Columbia", team: "Pacific Storm", beds: 44 },
+  { name: "Stafholt Health and Rehabilitation of Cascadia", type: "SNF", address: "456 C Street", city: "Blaine", state: "WA", zip: "98230", company: "Columbia", team: "Pacific Storm", beds: 57 },
+
+  // Columbia - Trail Blazers
+  { name: "Beaverton Post Acute of Cascadia", type: "SNF", address: "11850 SW Allen Blvd.", city: "Beaverton", state: "OR", zip: "97005", company: "Columbia", team: "Trail Blazers", beds: 92 },
+  { name: "Fairlawn Health and Rehabilitation of Cascadia", type: "SNF", address: "3457 NE Division Street", city: "Gresham", state: "OR", zip: "97030", company: "Columbia", team: "Trail Blazers", beds: 82 },
+  { name: "Secora Rehabilitation of Cascadia", type: "SNF", address: "10435 Southeast Cora Street", city: "Portland", state: "OR", zip: "97266", company: "Columbia", team: "Trail Blazers", beds: 53 },
+  { name: "Village Manor of Cascadia", type: "SNF", address: "2060 NE 238th Dr", city: "Wood Village", state: "OR", zip: "97060", company: "Columbia", team: "Trail Blazers", beds: 60 },
+
+  // Columbia - Evergreen Alliance
+  { name: "Bend Transitional Care", type: "SNF", address: "900 NE 27th Street", city: "Bend", state: "OR", zip: "97701", company: "Columbia", team: "Evergreen Alliance", beds: 60 },
+  { name: "Creekside Health and Rehabilitation of Cascadia", type: "SNF", address: "3500 Hilyard Street", city: "Eugene", state: "OR", zip: "97405", company: "Columbia", team: "Evergreen Alliance", beds: 87 },
+  { name: "Curry Village Health and Rehabilitation of Cascadia", type: "SNF", address: "1 Park Ave", city: "Brookings", state: "OR", zip: "97415", company: "Columbia", team: "Evergreen Alliance", beds: 59 },
+  { name: "Curry Village of Cascadia - Hillside Apartments", type: "ILF", address: "420 Hillside Ave", city: "Brookings", state: "OR", zip: "97415", company: "Columbia", team: "Evergreen Alliance", beds: 14 },
+  { name: "Salem Transitional Care", type: "SNF", address: "3445 Boone Road SE", city: "Salem", state: "OR", zip: "97317", company: "Columbia", team: "Evergreen Alliance", beds: 80 },
+
+  // Columbia - Bigfoot
+  { name: "Brookfield Health & Rehabilitation of Cascadia", type: "SNF", address: "510 North Parkway Avenue", city: "Battle Ground", state: "WA", zip: "98604", company: "Columbia", team: "Bigfoot", beds: 83 },
+  { name: "Hudson Bay Health & Rehabilitation", type: "SNF", address: "8507 NE 8th Way", city: "Vancouver", state: "WA", zip: "98664", company: "Columbia", team: "Bigfoot", beds: 92 },
+  { name: "Snohomish Health and Rehabilitation of Cascadia", type: "SNF", address: "800 10th St", city: "Snohomish", state: "WA", zip: "98290", company: "Columbia", team: "Bigfoot", beds: 91 },
+
+  // Envision - Triple Threat
+  { name: "Arbor Valley of Cascadia", type: "SNF", address: "8211 Ustick Road", city: "Boise", state: "ID", zip: "83704", company: "Envision", team: "Triple Threat", beds: 148 },
+  { name: "Cascadia of Boise", type: "SNF", address: "6000 West Denton St", city: "Boise", state: "ID", zip: "83704", company: "Envision", team: "Triple Threat", beds: 100 },
+  { name: "Shaw Mountain of Cascadia", type: "SNF", address: "909 E. Reserve St.", city: "Boise", state: "ID", zip: "83712", company: "Envision", team: "Triple Threat", beds: 108 },
+
+  // Envision - Ascend
+  { name: "Caldwell of Cascadia", type: "SNF", address: "210 Cleveland Boulevard", city: "Caldwell", state: "ID", zip: "83605", company: "Envision", team: "Ascend", beds: 71 },
+  { name: "Cherry Ridge of Cascadia", type: "SNF", address: "501 West Idaho Boulevard", city: "Emmett", state: "ID", zip: "83617", company: "Envision", team: "Ascend", beds: 40 },
+  { name: "The Orchards of Cascadia", type: "SNF", address: "404 North Horton Street", city: "Nampa", state: "ID", zip: "83651", company: "Envision", team: "Ascend", beds: 100 },
+  { name: "Wellspring Health and Rehab of Cascadia", type: "SNF", address: "2105 12th Ave", city: "Nampa", state: "ID", zip: "83686", company: "Envision", team: "Ascend", beds: 120 },
+
+  // Envision - Tomahawk
+  { name: "Canyon West of Cascadia", type: "SNF", address: "2814 South Indiana Avenue", city: "Caldwell", state: "ID", zip: "83605", company: "Envision", team: "Tomahawk", beds: 103 },
+  { name: "Cascadia of Nampa", type: "SNF", address: "900 N Happy Valley Rd", city: "Nampa", state: "ID", zip: "83687", company: "Envision", team: "Tomahawk", beds: 99 },
+  { name: "Payette Healthcare of Cascadia", type: "SNF", address: "1019 3rd Avenue South", city: "Payette", state: "ID", zip: "83661", company: "Envision", team: "Tomahawk", beds: 80 },
+  { name: "Weiser Care of Cascadia", type: "SNF", address: "331 East Park Street", city: "Weiser", state: "ID", zip: "83672", company: "Envision", team: "Tomahawk", beds: 76 },
+
+  // Envision - Wolfpack
+  { name: "Eagle Rock Health and Rehabilitation of Cascadia", type: "SNF", address: "840 East Elva Street", city: "Idaho Falls", state: "ID", zip: "83401", company: "Envision", team: "Wolfpack", beds: 113 },
+  { name: "Teton Healthcare of Cascadia", type: "SNF", address: "3111 Channing Way", city: "Idaho Falls", state: "ID", zip: "83404", company: "Envision", team: "Wolfpack", beds: 88 },
+  { name: "The Cove of Cascadia - ALF", type: "ALF", address: "620 N. 6th Street", city: "Bellevue", state: "ID", zip: "83313", company: "Envision", team: "Wolfpack", beds: 16 },
+  { name: "The Cove of Cascadia - SNF", type: "SNF", address: "620 N. 6th Street", city: "Bellevue", state: "ID", zip: "83313", company: "Envision", team: "Wolfpack", beds: 32 },
+  { name: "Twin Falls Transitional Care of Cascadia", type: "SNF", address: "674 Eastland Drive", city: "Twin Falls", state: "ID", zip: "83301", company: "Envision", team: "Wolfpack", beds: 104 },
+
+  // Three Rivers - Palouse PAC
+  { name: "Aspen Park of Cascadia", type: "SNF", address: "420 Rowe Street", city: "Moscow", state: "ID", zip: "83843", company: "Three Rivers", team: "Palouse PAC", beds: 70 },
+  { name: "Clearwater Health & Rehabilitation of Cascadia", type: "SNF", address: "1204 Shriver Road", city: "Orofino", state: "ID", zip: "83544", company: "Three Rivers", team: "Palouse PAC", beds: 60 },
+  { name: "Paradise Creek Health and Rehabilitation of Cascadia - SNF", type: "SNF", address: "640 N Eisenhower Street", city: "Moscow", state: "ID", zip: "83843", company: "Three Rivers", team: "Palouse PAC", beds: 63 },
+
+  // Three Rivers - Two Rivers
+  { name: "Cascadia of Lewiston", type: "SNF", address: "2852 Juniper Drive", city: "Lewiston", state: "ID", zip: "83501", company: "Three Rivers", team: "Two Rivers", beds: 34 },
+  { name: "Grangeville Health and Rehabilitation of Cascadia", type: "SNF", address: "410 Northeast 2nd Street", city: "Grangeville", state: "ID", zip: "83530", company: "Three Rivers", team: "Two Rivers", beds: 60 },
+  { name: "Lewiston Transitional Care of Cascadia", type: "SNF", address: "3315 8th Street", city: "Lewiston", state: "ID", zip: "83501", company: "Three Rivers", team: "Two Rivers", beds: 96 },
+  { name: "Royal Plaza Health and Rehabilitation of Cascadia", type: "SNF", address: "2870 Juniper Dr", city: "Lewiston", state: "ID", zip: "83501", company: "Three Rivers", team: "Two Rivers", beds: 75 },
+
+  // Northern - Northern FORCE
+  { name: "Clarkston Health and Rehabilitation of Cascadia", type: "SNF", address: "1242 11th Street", city: "Clarkston", state: "WA", zip: "99403", company: "Northern", team: "Northern FORCE", beds: 90 },
+  { name: "Colfax Health and Rehabilitation of Cascadia", type: "SNF", address: "1150 W Fairview St", city: "Colfax", state: "WA", zip: "99111", company: "Northern", team: "Northern FORCE", beds: 55 },
+  { name: "Colville Health & Rehabilitation of Cascadia", type: "SNF", address: "1000 East Elep Avenue", city: "Colville", state: "WA", zip: "99114", company: "Northern", team: "Northern FORCE", beds: 92 },
+  { name: "Spokane Valley Health and Rehabilitation of Cascadia", type: "SNF", address: "17121 East 8th Avenue", city: "Spokane Valley", state: "WA", zip: "99016", company: "Northern", team: "Northern FORCE", beds: 97 },
+
+  // Northern - Golden Meadowlarks
+  { name: "Libby Care Center of Cascadia", type: "SNF", address: "308 East Third Street", city: "Libby", state: "MT", zip: "59923", company: "Northern", team: "Golden Meadowlarks", beds: 101 },
+  { name: "Mount Ascension Transitional Care of Cascadia", type: "SNF", address: "2475 Winne Avenue", city: "Helena", state: "MT", zip: "59601", company: "Northern", team: "Golden Meadowlarks", beds: 108 },
+  { name: "Mountain View of Cascadia", type: "SNF", address: "10 Mountain View Dr", city: "Eureka", state: "MT", zip: "59917", company: "Northern", team: "Golden Meadowlarks", beds: 49 },
+
+  // Northern - North By Northwest
+  { name: "Coeur d'Alene Health and Rehabilitation of Cascadia", type: "SNF", address: "2514 N. 7th Street", city: "Coeur D Alene", state: "ID", zip: "83814", company: "Northern", team: "North By Northwest", beds: 117 },
+  { name: "Mountain Valley of Cascadia", type: "SNF", address: "601 West Cameron Avenue", city: "Kellogg", state: "ID", zip: "83837", company: "Northern", team: "North By Northwest", beds: 68 },
+  { name: "Silverton Health and Rehabilitation of Cascadia", type: "SNF", address: "405 West 7th St.", city: "Silverton", state: "ID", zip: "83867", company: "Northern", team: "North By Northwest", beds: 50 },
+  { name: "Silverton of Cascadia Retirement Living-ALF", type: "ALF", address: "405 West 7th Street", city: "Silverton", state: "ID", zip: "83843", company: "Northern", team: "North By Northwest", beds: 14 },
+  { name: "Silverton of Cascadia Retirement Living-ILF", type: "ILF", address: "405 West 7th St.", city: "Silverton", state: "ID", zip: "83867", company: "Northern", team: "North By Northwest", beds: 14 },
+
+  // Vincero - Rising Phoenix
+  { name: "Boswell Transitional Care of Cascadia", type: "SNF", address: "10601 W. Santa Fe Drive", city: "Sun City", state: "AZ", zip: "85351", company: "Vincero", team: "Rising Phoenix", beds: 115 },
+  { name: "NorthPark Health and Rehabilitation of Cascadia", type: "SNF", address: "2020 North 95th Avenue", city: "Phoenix", state: "AZ", zip: "85037", company: "Vincero", team: "Rising Phoenix", beds: 54 },
+
+  // Olympus - Olympus (all Olympus facilities go to team "Olympus")
+  { name: "Creekside of Olympus Retirement Living ILF", type: "ILF", address: "3500 Hilyard St.", city: "Eugene", state: "OR", zip: "97405", company: "Olympus", team: "Olympus", beds: 24 },
+  { name: "Creekside-The Abbey of Olympus Retirement Living ILF", type: "ILF", address: "494 West 10th Ave", city: "Eugene", state: "OR", zip: "97401", company: "Olympus", team: "Olympus", beds: 50 },
+  { name: "Fairlawn of Olympus Retirement Living ILF", type: "ILF", address: "1280 NE Kane Drive", city: "Gresham", state: "OR", zip: "97030", company: "Olympus", team: "Olympus", beds: 119 },
+  { name: "Olympus Living at Spokane Valley - ILF", type: "ILF", address: "17117 East 8th Avenue", city: "Spokane Valley", state: "WA", zip: "99016", company: "Olympus", team: "Olympus", beds: 136 },
+  { name: "Olympus Living at Spokane Valley-ALF", type: "ALF", address: "17117 East 8th Avenue", city: "Spokane Valley", state: "WA", zip: "99016", company: "Olympus", team: "Olympus", beds: 14 },
+  { name: "Paradise Creek Fairview Estates of Olympus Retirement - ILF", type: "ILF", address: "403 Samaritan Lane", city: "Moscow", state: "ID", zip: "83843", company: "Olympus", team: "Olympus", beds: 60 },
+  { name: "Paradise Creek of Olympus Retirement Living - ALF", type: "ALF", address: "640 North Eisenhower Street", city: "Moscow", state: "ID", zip: "83843", company: "Olympus", team: "Olympus", beds: 36 },
+  { name: "Paradise Creek of Olympus Retirement Living - ILF", type: "ILF", address: "640 North Eisenhower St.", city: "Moscow", state: "ID", zip: "83843", company: "Olympus", team: "Olympus", beds: 62 },
+  { name: "Royal Plaza of Olympus Living - ALF", type: "ALF", address: "2870 Juniper Dr", city: "Lewiston", state: "ID", zip: "83501", company: "Olympus", team: "Olympus", beds: 110 },
+];
 
 // Users to seed
 const usersData = [
@@ -156,40 +136,60 @@ async function seed() {
 
     console.log('Seeding companies, teams, and facilities...');
 
-    let totalFacilities = 0;
-    let totalTeams = 0;
+    // First, collect unique companies and teams
+    const companiesMap = new Map();
+    const teamsMap = new Map();
 
-    for (const [companyName, companyData] of Object.entries(organizationData)) {
-      // Create company
-      const company = await Company.create({ name: companyName });
-      console.log(`  Created company: ${companyName}`);
-
-      for (const [teamName, facilities] of Object.entries(companyData.teams)) {
-        // Create team
-        const team = await Team.create({
-          name: teamName,
-          companyId: company.id
-        });
-        console.log(`    Created team: ${teamName}`);
-        totalTeams++;
-
-        // Create facilities
-        for (const facilityName of facilities) {
-          await Facility.create({
-            name: facilityName,
-            teamId: team.id,
-            facilityType: 'SNF',
-            isActive: true
-          });
-          totalFacilities++;
-        }
-        console.log(`      Created ${facilities.length} facilities`);
+    for (const facility of facilitiesData) {
+      if (!companiesMap.has(facility.company)) {
+        companiesMap.set(facility.company, null);
+      }
+      const teamKey = `${facility.company}|${facility.team}`;
+      if (!teamsMap.has(teamKey)) {
+        teamsMap.set(teamKey, { company: facility.company, team: facility.team });
       }
     }
 
-    console.log(`\nCreated ${Object.keys(organizationData).length} companies`);
-    console.log(`Created ${totalTeams} teams`);
-    console.log(`Created ${totalFacilities} facilities`);
+    // Create companies
+    for (const companyName of companiesMap.keys()) {
+      const company = await Company.create({ name: companyName });
+      companiesMap.set(companyName, company);
+      console.log(`  Created company: ${companyName}`);
+    }
+
+    // Create teams
+    for (const [teamKey, teamInfo] of teamsMap.entries()) {
+      const company = companiesMap.get(teamInfo.company);
+      const team = await Team.create({
+        name: teamInfo.team,
+        companyId: company.id
+      });
+      teamsMap.set(teamKey, { ...teamInfo, teamModel: team });
+      console.log(`    Created team: ${teamInfo.team} (${teamInfo.company})`);
+    }
+
+    // Create facilities
+    let facilityCount = 0;
+    for (const facilityData of facilitiesData) {
+      const teamKey = `${facilityData.company}|${facilityData.team}`;
+      const teamInfo = teamsMap.get(teamKey);
+
+      await Facility.create({
+        name: facilityData.name,
+        teamId: teamInfo.teamModel.id,
+        facilityType: facilityData.type,
+        address: facilityData.address,
+        city: facilityData.city,
+        state: facilityData.state,
+        zipCode: facilityData.zip,
+        isActive: true
+      });
+      facilityCount++;
+    }
+
+    console.log(`\nCreated ${companiesMap.size} companies`);
+    console.log(`Created ${teamsMap.size} teams`);
+    console.log(`Created ${facilityCount} facilities`);
 
     console.log('\nSeeding users...');
     const createdUsers = {};
@@ -199,15 +199,16 @@ async function seed() {
       console.log(`  Created user: ${user.email} (${user.role})`);
     }
 
-    // Assign clinical resource to first 3 facilities from Pacific Storm team
+    // Assign clinical resource to first 3 SNF facilities
     console.log('\nAssigning facilities to clinical resource...');
     const clinician = createdUsers['clinician@cascadia.com'];
-    const firstThreeFacilities = await Facility.findAll({
+    const snfFacilities = await Facility.findAll({
+      where: { facilityType: 'SNF' },
       limit: 3,
       order: [['id', 'ASC']]
     });
 
-    for (const facility of firstThreeFacilities) {
+    for (const facility of snfFacilities) {
       await UserFacility.create({
         userId: clinician.id,
         facilityId: facility.id
@@ -219,7 +220,63 @@ async function seed() {
     console.log('\nTest credentials:');
     console.log('  Admin: admin@cascadia.com / password123');
     console.log('  Clinician: clinician@cascadia.com / password123');
-    console.log(`\nClinician is assigned to ${firstThreeFacilities.length} facilities`);
+    console.log(`\nClinician is assigned to ${snfFacilities.length} facilities`);
+
+    // Summary by company
+    console.log('\nFacility Summary:');
+    for (const [companyName] of companiesMap) {
+      const count = facilitiesData.filter(f => f.company === companyName).length;
+      console.log(`  ${companyName}: ${count} facilities`);
+    }
+
+    // Seed audit template from auditCriteria.js
+    console.log('\nSeeding audit template...');
+    const admin = createdUsers['admin@cascadia.com'];
+
+    // Create the master template
+    const template = await AuditTemplate.create({
+      name: 'Master Template',
+      isActive: true,
+      createdById: admin.id,
+      updatedById: admin.id
+    });
+    console.log('  Created master template');
+
+    // Create systems and items from auditCriteria
+    const scoredSystems = getScoredSystems();
+    let totalItems = 0;
+
+    for (const systemData of scoredSystems) {
+      const templateSystem = await AuditTemplateSystem.create({
+        templateId: template.id,
+        systemNumber: systemData.systemNumber,
+        name: systemData.name,
+        maxPoints: systemData.maxPoints,
+        sections: systemData.sections || [],
+        pageDescription: systemData.pageDescription || null,
+        sortOrder: systemData.systemNumber
+      });
+
+      // Create items for this system
+      for (let i = 0; i < systemData.items.length; i++) {
+        const item = systemData.items[i];
+        await AuditTemplateItem.create({
+          templateSystemId: templateSystem.id,
+          itemNumber: item.number,
+          text: item.text,
+          maxPoints: item.maxPoints,
+          sampleSize: item.sampleSize,
+          multiplier: item.multiplier,
+          inputType: item.inputType,
+          sortOrder: i + 1
+        });
+        totalItems++;
+      }
+
+      console.log(`  System ${systemData.systemNumber}: ${systemData.name} (${systemData.items.length} items)`);
+    }
+
+    console.log(`\n✓ Created audit template with ${scoredSystems.length} systems and ${totalItems} items`);
 
     process.exit(0);
   } catch (error) {

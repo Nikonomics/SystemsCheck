@@ -277,6 +277,26 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#374151',
   },
+  // Notes section
+  notesSection: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#fffbeb',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+  },
+  notesTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#92400e',
+    marginBottom: 5,
+  },
+  notesText: {
+    fontSize: 9,
+    color: '#374151',
+    lineHeight: 1.4,
+  },
 });
 
 /**
@@ -330,10 +350,13 @@ export function ScorecardPDF({ scorecard, scores }) {
               <Text style={[styles.scoreValue, { color: scoreColor }]}>
                 {scores.totalScore}
               </Text>
-              <Text style={styles.scoreMax}>/800</Text>
+              <Text style={styles.scoreMax}>/700</Text>
             </View>
             <Text style={[styles.scorePercent, { color: scoreColor }]}>
               {percentage}%
+            </Text>
+            <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 4 }}>
+              {scores.systemScores.map(s => `S${s.systemNumber}:${s.score.toFixed(0)}`).join('  ')}
             </Text>
           </View>
 
@@ -529,6 +552,14 @@ export function ScorecardPDF({ scorecard, scores }) {
                     </View>
                   ))}
                 </View>
+              </View>
+            )}
+
+            {/* Auditor Notes */}
+            {system.notes && (
+              <View style={styles.notesSection}>
+                <Text style={styles.notesTitle}>Auditor Notes</Text>
+                <Text style={styles.notesText}>{system.notes}</Text>
               </View>
             )}
 

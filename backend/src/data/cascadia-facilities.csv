@@ -1,0 +1,68 @@
+Facility Name,Type,PCC ID,Finance ID,Paylocity ID,Address,City,State,ZIP,County,Telephone,Fax,AR Start Date,Company,Team,Beds,NPI,CCN,EIN,TimeZone
+Alderwood Park Health & Rehabilitation,SNF,40,405,150212,2726 Alderwood Ave,Bellingham,WA,98225,Whatcom,(360) 733-2322,(360) 733-0229,02/01/22,Columbia,Pacific Storm,102,1467111807,505092,873883791,-3
+Arbor Valley of Cascadia,SNF,31,117,115722,8211 Ustick Road,Boise,ID,83704,Ada,(208) 375-3700,(208) 375-3760,06/01/20,Envision,Triple Threat,148,1063966638,135079,813270340,-2
+Aspen Park of Cascadia,SNF,26,108,80741,420 Rowe Street,Moscow,ID,83843,Latah,(208) 882-4576,(208) 892-8776,10/01/17,Three Rivers,Palouse PAC,70,1194236406,135093,822120403,-3
+Beaverton Post Acute of Cascadia,SNF,72,311,346644,11850 SW Allen Blvd.,Beaverton,OR,97005,Washington,(503) 646-7164,(503) 646-5105,12/01/25,Columbia,Trail Blazers,92,1366469330,385195,394555222,-3
+Bend Transitional Care,SNF,74,309,346643,900 NE 27th Street,Bend,OR,97701,Deschutes,(541) 382-0479,(541) 389-7054,12/01/25,Columbia,Evergreen Alliance,60,1790925428,385253,394508716,-3
+Boswell Transitional Care of Cascadia,SNF,50,502,160258,10601 W. Santa Fe Drive,Sun City,AZ,85351,Maricopa,(623) 832-7000,,08/01/22,Vincero,Rising Phoenix,115,1306578737,35121,882879255,-2
+Brookfield Health & Rehabilitation of Cascadia,SNF,19,401,80743,510 North Parkway Avenue,Battle Ground,WA,98604,Clark,(360) 687-5141,(360) 369-6033,09/01/17,Columbia,Bigfoot,83,1790218386,505331,821113133,-3
+Caldwell of Cascadia,SNF,20,107,80744,210 Cleveland Boulevard,Caldwell,ID,83605,Canyon,(208) 459-1522,(208) 419-3279,09/01/17,Envision,Ascend,71,1467978460,135014,822108080,-2
+Canyon West of Cascadia,SNF,21,105,80745,2814 South Indiana Avenue,Caldwell,ID,83605,Canyon,(208) 459-0808,(208) 459-2876,09/01/17,Envision,Tomahawk,103,1770009680,135051,822108394,-2
+Cascadia Healthcare,,13,999,80749,"2205 E Riverside Dr, Suite 100",Eagle,ID,83616,Ada,(208) 401-9600,,05/01/16,Home Office Region,Home Office Center,,,,611774582,-2
+Cascadia of Boise,SNF,28,113,80742,6000 West Denton St,Boise,ID,83704,Ada,(208) 629-4383,(208) 376-0466,05/01/18,Envision,Triple Threat,100,1295249241,135146,822939258,-2
+Cascadia of Lewiston,SNF,47,123,148741,2852 Juniper Drive,Lewiston,ID,83501,Nez Perce,(208) 748-7700,(208) 748-7750,03/01/22,Three Rivers,Two Rivers,34,1376205260,135145,872677711,-3
+Cascadia of Nampa,SNF,27,112,80753,900 N Happy Valley Rd,Nampa,ID,83687,Canyon,(208) 401-9639,(208) 881-0143,11/01/17,Envision,Tomahawk,99,1356867683,135144,822371983,-2
+Cherry Ridge of Cascadia,SNF,32,119,115721,501 West Idaho Boulevard,Emmett,ID,83617,Gem,(208) 365-3597,(208) 365-9885,06/01/20,Envision,Ascend,40,1497388003,135095,844391229,-2
+Clarkston Health and Rehabilitation of Cascadia,SNF,39,402,140363,1242 11th Street,Clarkston,WA,99403,Asotin,(509) 758-2523,(509) 295-2952,12/01/21,Northern,Northern FORCE,90,1417523887,505283,870891998,-3
+Clearwater Health & Rehabilitation of Cascadia,SNF,14,102,80747,1204 Shriver Road,Orofino,ID,83544,Clearwater,(208) 476-4568,(208) 476-3614,01/01/17,Three Rivers,Palouse PAC,60,1760925572,135048,814421338,-3
+Coeur d'Alene Health and Rehabilitation of Cascadia,SNF,16,103,80748,2514 N. 7th Street,Coeur D Alene,ID,83814,Kootenai,(208) 664-8128,(208) 665-7073,01/01/17,Northern,North By Northwest,117,1487197299,135052,814421680,-3
+Colfax Health and Rehabilitation of Cascadia,SNF,45,404,150214,1150 W Fairview St,Colfax,WA,99111,Whitman,(509) 397-4603,(509) 397-7962,02/01/22,Northern,Northern FORCE,55,1548929987,505251,873884004,-3
+Colville Health & Rehabilitation of Cascadia,SNF,51,408,142898,1000 East Elep Avenue,Colville,WA,99114,Stevens,(509) 684-2573,(509) 684-5459,08/01/22,Northern,Northern FORCE,92,1972262335,505275,873668829,-3
+Creekside Health and Rehabilitation of Cascadia,SNF,59,305,164612,3500 Hilyard Street,Eugene,OR,97405,Lane,(541) 687-9211,(541) 687-9687,04/01/23,Columbia,Evergreen Alliance,87,1144930009,385147,921203020,-3
+Creekside of Olympus Retirement Living ILF,ILF,61,306,164613,3500 Hilyard St.,Eugene,OR,97405,Lane,(541) 687-9211,,04/01/23,Olympus,Olympus,24,1851001622,,884345436,-3
+Creekside-The Abbey of Olympus Retirement Living ILF,ILF,60,306,164613,494 West 10th Ave,Eugene,OR,97401,Lane,(541) 342-6077,,04/01/23,Olympus,Olympus,50,1851001622,,884345436,-3
+Curry Village Health and Rehabilitation of Cascadia,SNF,64,303,164611,1 Park Ave,Brookings,OR,97415,Curry,(541) 469-3111,(541) 216-5083,04/01/23,Columbia,Evergreen Alliance,59,1447960307,385165,921202871,-3
+Curry Village of Cascadia - Hillside Apartments ILF,ILF,65,304,164611,420 Hillside Ave,Brookings,OR,97415,Curry,(541) 469-3111,,04/01/23,Columbia,Evergreen Alliance,14,1447960307,,921202871,-3
+Eagle Rock Health and Rehabilitation of Cascadia,SNF,52,127,164607,840 East Elva Street,Idaho Falls,ID,83401,Bonneville,(208) 523-4795,(208) 522-9175,03/01/23,Envision,Wolfpack,113,1972220473,135092,920816033,-2
+Fairlawn Health and Rehabilitation of Cascadia,SNF,62,307,164614,3457 NE Division Street,Gresham,OR,97030,Multnomah,(503) 667-1965,(541) 366-5764,04/01/23,Columbia,Trail Blazers,82,1417667262,385133,921212858,-3
+Fairlawn of Olympus Retirement Living ILF,ILF,63,308,164615,1280 NE Kane Drive,Gresham,OR,97030,Multnomah,(877) 949-5678,,04/01/23,Olympus,Olympus,119,1306556154,,921212994,-3
+Grangeville Health and Rehabilitation of Cascadia,SNF,48,122,148742,410 Northeast 2nd Street,Grangeville,ID,83530,Idaho,(208) 983-1131,(208) 983-9140,03/01/22,Three Rivers,Two Rivers,60,1740942622,135080,872653987,-3
+Highland Health & Rehabilitation of Cascadia,SNF,41,406,150215,2400 Samish Way,Bellingham,WA,98229,Whatcom,(360) 734-4800,(360) 734-1013,02/01/22,Columbia,Pacific Storm,44,1811656259,505140,873883909,-3
+Hudson Bay Health & Rehabilitation,SNF,38,403,140364,8507 NE 8th Way,Vancouver,WA,98664,Clark,(360) 254-5335,(360) 892-2086,09/01/21,Columbia,Bigfoot,92,1790352078,505260,870960997,-3
+Lewiston Transitional Care of Cascadia,SNF,25,109,80750,3315 8th Street,Lewiston,ID,83501,Nez Perce,(208) 743-9543,(208) 743-3945,10/01/17,Three Rivers,Two Rivers,96,1477064780,135021,822108759,-3
+Libby Care Center of Cascadia,SNF,15,201,80751,308 East Third Street,Libby,MT,59923,Lincoln,(406) 293-6285,,01/01/17,Northern,Golden Meadowlarks,101,1750824546,275040,814402637,-2
+Mount Ascension Transitional Care of Cascadia,SNF,36,202,129886,2475 Winne Avenue,Helena,MT,59601,Lewis and Clark,(406) 442-1350,(406) 389-8083,03/01/21,Northern,Golden Meadowlarks,108,1780274373,275044,861518836,-2
+Mountain Valley of Cascadia,SNF,22,106,80752,601 West Cameron Avenue,Kellogg,ID,83837,Shoshone,(208) 784-1283,(208) 784-0151,09/01/17,Northern,North By Northwest,68,1396261202,135065,822120477,-3
+Mountain View of Cascadia,SNF,55,203,164606,10 Mountain View Dr,Eureka,MT,59917,Lincoln,(406) 297-2541,(406) 297-2543,03/01/23,Northern,Golden Meadowlarks,49,1194442681,275084,920808221,-2
+NorthPark Health and Rehabilitation of Cascadia,SNF,35,501,122560,2020 North 95th Avenue,Phoenix,AZ,85037,Maricopa,(623) 248-5696,(623) 259-9584,02/01/21,Vincero,Rising Phoenix,54,1710598420,35299,852491895,-2
+Olympus Living at Spokane Valley - ILF,ILF,70,410,164623,17117 East 8th Avenue,Spokane Valley,WA,99016,Spokane,(509) 924-6161,,07/01/23,Olympus,Olympus,136,1437130218,,921228655,-3
+Olympus Living at Spokane Valley-ALF,ALF,69,410,164623,17117 East 8th Avenue,Spokane Valley,WA,99016,Spokane,(509) 924-6161,(877) 477-7237,07/01/23,Olympus,Olympus,14,1528778107,,921228655,-3
+Paradise Creek Fairview Estates of Olympus Retirement - ILF,ILF,67,132,164609,403 Samaritan Lane,Moscow,ID,83843,Latah,(208) 882-6560,,05/01/23,Olympus,Olympus,60,1689391161,,884214254,-3
+Paradise Creek Health and Rehabilitation of Cascadia - SNF,SNF,53,131,164608,640 N Eisenhower Street,Moscow,ID,83843,Latah,(208) 882-6560,(986) 600-5662,05/01/23,Three Rivers,Palouse PAC,63,1811614332,135067,920816969,-3
+Paradise Creek of Olympus Retirement Living - ALF,ALF,54,132,164609,640 North Eisenhower Street,Moscow,ID,83843,Latah,(208) 882-6560,(208) 883-1588,05/01/23,Olympus,Olympus,36,1689391161,,884214254,-3
+Paradise Creek of Olympus Retirement Living - ILF,ILF,66,132,164609,640 North Eisenhower St.,Moscow,ID,83843,Latah,(208) 882-6560,,05/01/23,Olympus,Olympus,62,1689391161,,884214254,-3
+Payette Healthcare of Cascadia,SNF,33,118,115720,1019 3rd Avenue South,Payette,ID,83661,Payette,(208) 642-4455,(208) 642-2750,06/01/20,Envision,Tomahawk,80,1235683806,135015,813251202,-2
+Royal Plaza Health and Rehabilitation of Cascadia,SNF,42,124,150247,2870 Juniper Dr,Lewiston,ID,83501,Nez Perce,(208) 746-2855,(208) 746-4994,02/01/22,Three Rivers,Two Rivers,75,1558022319,135116,874144815,-3
+Royal Plaza of Olympus Living - ALF,ALF,46,125,150246,2870 Juniper Dr,Lewiston,ID,83501,Nez Perce,(208) 746-2800,(208) 746-0164,05/01/22,Olympus,Olympus,110,1982365763,,874141434,-3
+Salem Transitional Care,SNF,73,310,346645,3445 Boone Road SE,Salem,OR,97317,Marion,(503) 576-3000,(503) 585-8046,12/01/25,Columbia,Evergreen Alliance,80,1215071998,385234,394612520,-3
+Secora Rehabilitation of Cascadia,SNF,18,301,80755,10435 Southeast Cora Street,Portland,OR,97266,Multnomah,(503) 760-1737,(503) 928-3965,07/01/17,Columbia,Trail Blazers,53,1700319381,385264,821113614,-3
+Shaw Mountain of Cascadia,SNF,12,101,80756,909 E. Reserve St.,Boise,ID,83712,Ada,(208) 343-7717,(208) 336-4629,05/01/16,Envision,Triple Threat,108,1700245594,135090,364823048,-2
+Silverton Health and Rehabilitation of Cascadia,SNF,56,128,164610,405 West 7th St.,Silverton,ID,83867,Shoshone,(208) 556-1147,(208) 753-0080,03/01/23,Northern,North By Northwest,50,1841917481,135058,920802533,-3
+Silverton of Cascadia Retirement Living-ALF,ALF,57,129,164610,405 West 7th Street,Silverton,ID,83843,Shoshone,(208) 556-1147,(208) 556-0157,03/01/23,Northern,North By Northwest,14,1235901018,,920802533,-3
+Silverton of Cascadia Retirement Living-ILF,ILF,58,129,164610,405 West 7th St.,Silverton,ID,83867,Shoshone,(208) 556-1147,,03/01/23,Northern,North By Northwest,14,1235901018,,920802533,-3
+Snohomish Health and Rehabilitation of Cascadia,SNF,43,407,150213,800 10th St,Snohomish,WA,98290,Snohomish,(360) 568-3161,(360) 568-4455,02/01/22,Columbia,Bigfoot,91,1598424954,505338,873884081,-3
+Spokane Valley Health and Rehabilitation of Cascadia,SNF,68,409,164622,17121 East 8th Avenue,Spokane Valley,WA,99016,Spokane,(509) 924-6161,(509) 824-7829,07/01/23,Northern,Northern FORCE,97,1801506480,505099,921228326,-3
+Stafholt Health and Rehabilitation of Cascadia,SNF,71,411,164621,456 C Street,Blaine,WA,98230,Whatcom,(360) 332-8733,(360) 332-8734,07/01/23,Columbia,Pacific Storm,57,1386354231,505395,921202536,-3
+Teton Healthcare of Cascadia,SNF,44,126,150245,3111 Channing Way,Idaho Falls,ID,83404,Bonneville,(208) 529-0067,(208) 908-6867,02/01/22,Envision,Wolfpack,88,1467113233,135138,874144931,-2
+The Cove of Cascadia - ALF,ALF,30,115,110750,620 N. 6th Street,Bellevue,ID,83313,Blaine,(208) 788-7180,(208) 788-7210,02/01/20,Envision,Wolfpack,16,1861946436,,813251059,-2
+The Cove of Cascadia - SNF,SNF,29,114,110750,620 N. 6th Street,Bellevue,ID,83313,Blaine,(208) 788-7180,(208) 788-7210,02/01/20,Envision,Wolfpack,32,1861946436,135069,813251059,-2
+The Orchards of Cascadia,SNF,24,111,80754,404 North Horton Street,Nampa,ID,83651,Canyon,(208) 466-9292,,10/01/17,Envision,Ascend,100,1912418229,135019,822108874,-2
+Twin Falls Transitional Care of Cascadia,SNF,34,116,115719,674 Eastland Drive,Twin Falls,ID,83301,Twin Falls,(208) 734-4264,(208) 734-0647,06/01/20,Envision,Wolfpack,104,1437603008,135104,813270450,-2
+Village Manor of Cascadia,SNF,49,302,142899,2060 NE 238th Dr,Wood Village,OR,97060,Multnomah,(503) 491-0553,(503) 618-8162,07/01/22,Columbia,Trail Blazers,60,1497492672,3.80E+175,881996449,-3
+Weiser Care of Cascadia,SNF,23,110,80757,331 East Park Street,Weiser,ID,83672,Washington,(208) 549-2416,(208) 549-0536,10/01/17,Envision,Tomahawk,76,1821509134,135010,822120311,-2
+Wellspring Health and Rehab of Cascadia,SNF,17,104,80758,2105 12th Ave,Nampa,ID,83686,Canyon,(208) 467-5721,(208) 467-2748,05/01/17,Envision,Ascend,120,1699208280,135094,821113412,-2
+,,,,,,,,,,,,,,,,,,,
+"Applied filters:
+Facility Name is not Las Cruces Post Acute Rehabilitation
+Facility is not Las Cruces
+Facility is not Las Cruces",,,,,,,,,,,,,,,,,,,

@@ -73,6 +73,21 @@ const Scorecard = sequelize.define('Scorecard', {
       model: 'users',
       key: 'id'
     }
+  },
+  totalScore: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'total_score',
+    defaultValue: 0
+  },
+  updatedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'updated_by_id',
+    references: {
+      model: 'users',
+      key: 'id'
+    }
   }
 }, {
   tableName: 'scorecards',

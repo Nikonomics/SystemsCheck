@@ -10,8 +10,16 @@ export const reportsApi = {
   },
 
   /**
+   * Get list of states that have facilities (for filter dropdown)
+   */
+  getStates: async () => {
+    const response = await client.get('/reports/states');
+    return response.data;
+  },
+
+  /**
    * Get team comparison data
-   * @param {Object} params - { company_id, date_range }
+   * @param {Object} params - { company_id, date_range, state }
    */
   getTeams: async (params = {}) => {
     const response = await client.get('/reports/teams', { params });
@@ -20,7 +28,7 @@ export const reportsApi = {
 
   /**
    * Get company comparison data
-   * @param {Object} params - { date_range }
+   * @param {Object} params - { date_range, state }
    */
   getCompanies: async (params = {}) => {
     const response = await client.get('/reports/companies', { params });
@@ -38,7 +46,7 @@ export const reportsApi = {
 
   /**
    * Get system analysis data
-   * @param {Object} params - { company_id, team_id, date_range }
+   * @param {Object} params - { company_id, team_id, date_range, state }
    */
   getSystems: async (params = {}) => {
     const response = await client.get('/reports/systems', { params });

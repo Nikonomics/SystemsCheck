@@ -12,6 +12,7 @@
     "db:reset": "sequelize-cli db:drop && sequelize-cli db:create && npm run db:migrate && npm run db:seed",
     "populate-ccns": "node src/scripts/populateCCNs.js",
     "db:add-ccns": "node src/scripts/addCcns.js",
+    "db:seed-prod": "node src/scripts/seedProduction.js",
     "sync-facilities": "node src/scripts/syncSnfFacilities.js"
   },
   "dependencies": {

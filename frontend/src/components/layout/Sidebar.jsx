@@ -18,6 +18,7 @@ const navigation = [
   { name: 'Facilities', href: '/facilities', icon: Building2 },
   { name: 'Survey Analytics', href: '/survey-analytics', icon: Activity },
   { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain },
+  { name: 'Team Intelligence', href: '/survey-intelligence/team', icon: Users },
 ];
 
 const adminNavigation = [

@@ -17,7 +17,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import TagDetailModal from './TagDetailModal';
 
-const TagClickContext = createContext(null);
+export const TagClickContext = createContext(null);
 
 export function TagClickProvider({ children, facilityId, state }) {
   const [selectedTag, setSelectedTag] = useState(null);

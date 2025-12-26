@@ -62,6 +62,7 @@ export function ScorecardForm() {
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'error'
   const [pendingChanges, setPendingChanges] = useState({});
   const saveTimeoutRef = useRef(null);
+  const pendingChangesRef = useRef({}); // Track latest pending changes for flush
 
   // Modal state
   const [showTrialCloseModal, setShowTrialCloseModal] = useState(false);
@@ -155,6 +156,23 @@ export function ScorecardForm() {
     }
   }, [pendingChanges, saveChanges]);
 
+  // Keep ref in sync with pending changes for flush
+  useEffect(() => {
+    pendingChangesRef.current = pendingChanges;
+  }, [pendingChanges]);
+
+  // Flush pending changes immediately (used before navigation)
+  const flushChanges = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const changes = pendingChangesRef.current;
+    if (Object.keys(changes).length > 0) {
+      saveChanges(changes);
+    }
+  }, [saveChanges]);
+
   // Debounced save trigger
   useEffect(() => {
     if (Object.keys(pendingChanges).length === 0) return;
@@ -173,6 +191,12 @@ export function ScorecardForm() {
       }
     };
   }, [pendingChanges, saveChanges]);
+
+  // Handle tab navigation with flush
+  const handleTabChange = useCallback((newTab) => {
+    flushChanges(); // Save any pending changes before switching
+    setActiveTab(newTab);
+  }, [flushChanges]);
 
   // Handle item change
   const handleItemChange = useCallback((itemId, changes) => {
@@ -652,7 +676,7 @@ export function ScorecardForm() {
                 return (
                   <button
                     key={system.id}
-                    onClick={() => setActiveTab(sortedIndex)}
+                    onClick={() => handleTabChange(sortedIndex)}
                     className={`
                       flex items-center px-3 py-2 text-xs font-medium rounded-lg
                       transition-colors
@@ -680,7 +704,7 @@ export function ScorecardForm() {
 
             {/* Summary tab */}
             <button
-              onClick={() => setActiveTab(summaryTabIndex)}
+              onClick={() => handleTabChange(summaryTabIndex)}
               className={`
                 flex items-center px-3 py-2 text-xs font-medium rounded-lg
                 transition-colors
@@ -707,7 +731,7 @@ export function ScorecardForm() {
             systems={sortedSystems}
             onNavigateToSystem={(systemNumber) => {
               const idx = sortedSystems.findIndex(s => s.systemNumber === systemNumber);
-              if (idx >= 0) setActiveTab(idx);
+              if (idx >= 0) handleTabChange(idx);
             }}
           />
         ) : currentSystem && (
@@ -730,7 +754,7 @@ export function ScorecardForm() {
         <div className="flex items-center justify-between">
           <Button
             variant="secondary"
-            onClick={() => setActiveTab(Math.max(0, activeTab - 1))}
+            onClick={() => handleTabChange(Math.max(0, activeTab - 1))}
             disabled={activeTab === 0}
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
@@ -743,7 +767,7 @@ export function ScorecardForm() {
 
           <Button
             variant="secondary"
-            onClick={() => setActiveTab(Math.min(summaryTabIndex, activeTab + 1))}
+            onClick={() => handleTabChange(Math.min(summaryTabIndex, activeTab + 1))}
             disabled={isSummaryTab}
           >
             Next

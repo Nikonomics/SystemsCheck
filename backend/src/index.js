@@ -61,15 +61,17 @@ app.get('/api', (req, res) => {
 });
 
 // API Routes
+// NOTE: More specific paths MUST be registered before general paths
+// to prevent middleware from intercepting requests meant for other routers
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api', scorecardRoutes);
-app.use('/api', facilityRoutes);
-app.use('/api', reportRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/admin/template', templateRoutes);
-app.use('/api/cms', cmsDataRoutes);
+app.use('/api/cms', cmsDataRoutes);  // CMS routes are public - must be before general /api routes
+app.use('/api', scorecardRoutes);     // Has router.use(authenticateToken)
+app.use('/api', facilityRoutes);      // Has authenticateToken on each route
+app.use('/api', reportRoutes);        // Has authenticateToken on each route
 
 // Database sync and server start
 async function startServer() {

@@ -10,6 +10,9 @@ import {
   X,
   Check,
   AlertTriangle,
+  Building2,
+  Users,
+  MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -75,6 +78,7 @@ export function UserManagement() {
   });
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [facilityViewMode, setFacilityViewMode] = useState('team'); // 'company', 'team', 'facility'
 
   // Load users
   useEffect(() => {
@@ -306,6 +310,120 @@ export function UserManagement() {
     }));
   };
 
+  // Group facilities by company
+  const facilitiesByCompany = useMemo(() => {
+    const grouped = {};
+    facilities.forEach(facility => {
+      const companyName = facility.company?.name || 'Unknown';
+      const companyId = facility.company?.id || 0;
+      if (!grouped[companyId]) {
+        grouped[companyId] = { name: companyName, id: companyId, facilities: [] };
+      }
+      grouped[companyId].facilities.push(facility);
+    });
+    return Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
+  }, [facilities]);
+
+  // Group facilities by team (within company)
+  const facilitiesByTeam = useMemo(() => {
+    const grouped = {};
+    facilities.forEach(facility => {
+      const teamName = facility.team?.name || 'No Team';
+      const teamId = facility.team?.id || 0;
+      const companyName = facility.company?.name || 'Unknown';
+      if (!grouped[teamId]) {
+        grouped[teamId] = {
+          name: teamName,
+          id: teamId,
+          companyName,
+          facilities: []
+        };
+      }
+      grouped[teamId].facilities.push(facility);
+    });
+    return Object.values(grouped).sort((a, b) => {
+      const companyCompare = a.companyName.localeCompare(b.companyName);
+      if (companyCompare !== 0) return companyCompare;
+      return a.name.localeCompare(b.name);
+    });
+  }, [facilities]);
+
+  // Toggle all facilities in a company
+  const toggleCompany = (companyId) => {
+    const company = facilitiesByCompany.find(c => c.id === companyId);
+    if (!company) return;
+
+    const companyFacilityIds = company.facilities.map(f => f.id);
+    const allSelected = companyFacilityIds.every(id => formData.facilityIds.includes(id));
+
+    setFormData(prev => ({
+      ...prev,
+      facilityIds: allSelected
+        ? prev.facilityIds.filter(id => !companyFacilityIds.includes(id))
+        : [...new Set([...prev.facilityIds, ...companyFacilityIds])],
+    }));
+  };
+
+  // Toggle all facilities in a team
+  const toggleTeam = (teamId) => {
+    const team = facilitiesByTeam.find(t => t.id === teamId);
+    if (!team) return;
+
+    const teamFacilityIds = team.facilities.map(f => f.id);
+    const allSelected = teamFacilityIds.every(id => formData.facilityIds.includes(id));
+
+    setFormData(prev => ({
+      ...prev,
+      facilityIds: allSelected
+        ? prev.facilityIds.filter(id => !teamFacilityIds.includes(id))
+        : [...new Set([...prev.facilityIds, ...teamFacilityIds])],
+    }));
+  };
+
+  // Check if all facilities in a company are selected
+  const isCompanyFullySelected = (companyId) => {
+    const company = facilitiesByCompany.find(c => c.id === companyId);
+    if (!company) return false;
+    return company.facilities.every(f => formData.facilityIds.includes(f.id));
+  };
+
+  // Check if some (but not all) facilities in a company are selected
+  const isCompanyPartiallySelected = (companyId) => {
+    const company = facilitiesByCompany.find(c => c.id === companyId);
+    if (!company) return false;
+    const selectedCount = company.facilities.filter(f => formData.facilityIds.includes(f.id)).length;
+    return selectedCount > 0 && selectedCount < company.facilities.length;
+  };
+
+  // Check if all facilities in a team are selected
+  const isTeamFullySelected = (teamId) => {
+    const team = facilitiesByTeam.find(t => t.id === teamId);
+    if (!team) return false;
+    return team.facilities.every(f => formData.facilityIds.includes(f.id));
+  };
+
+  // Check if some (but not all) facilities in a team are selected
+  const isTeamPartiallySelected = (teamId) => {
+    const team = facilitiesByTeam.find(t => t.id === teamId);
+    if (!team) return false;
+    const selectedCount = team.facilities.filter(f => formData.facilityIds.includes(f.id)).length;
+    return selectedCount > 0 && selectedCount < team.facilities.length;
+  };
+
+  // Get count of selected facilities in a company
+  const getCompanySelectedCount = (companyId) => {
+    const company = facilitiesByCompany.find(c => c.id === companyId);
+    if (!company) return 0;
+    return company.facilities.filter(f => formData.facilityIds.includes(f.id)).length;
+  };
+
+  // Get count of selected facilities in a team
+  const getTeamSelectedCount = (teamId) => {
+    const team = facilitiesByTeam.find(t => t.id === teamId);
+    if (!team) return 0;
+    return team.facilities.filter(f => formData.facilityIds.includes(f.id)).length;
+  };
+
   const showFacilityAssignment = ['clinical_resource', 'team_leader'].includes(formData.role);
 
   return (
@@ -534,11 +652,88 @@ export function UserManagement() {
           </div>
           {showFacilityAssignment && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assign Facilities ({formData.facilityIds.length} selected)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Assign Facilities ({formData.facilityIds.length} selected)
+                </label>
+                <div className="flex rounded-md border border-gray-300 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('company')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 ${
+                      facilityViewMode === 'company'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Building2 className="h-3 w-3" /> Company
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('team')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 border-l border-r border-gray-300 ${
+                      facilityViewMode === 'team'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Users className="h-3 w-3" /> Team
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('facility')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 ${
+                      facilityViewMode === 'facility'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <MapPin className="h-3 w-3" /> Facility
+                  </button>
+                </div>
+              </div>
               <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto p-2">
-                {facilities.map(facility => (
+                {/* Company View */}
+                {facilityViewMode === 'company' && facilitiesByCompany.map(company => (
+                  <label key={company.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isCompanyFullySelected(company.id)}
+                      ref={el => {
+                        if (el) el.indeterminate = isCompanyPartiallySelected(company.id);
+                      }}
+                      onChange={() => toggleCompany(company.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <Building2 className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm font-medium">{company.name}</span>
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {getCompanySelectedCount(company.id)}/{company.facilities.length} facilities
+                    </span>
+                  </label>
+                ))}
+                {/* Team View */}
+                {facilityViewMode === 'team' && facilitiesByTeam.map(team => (
+                  <label key={team.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isTeamFullySelected(team.id)}
+                      ref={el => {
+                        if (el) el.indeterminate = isTeamPartiallySelected(team.id);
+                      }}
+                      onChange={() => toggleTeam(team.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <Users className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm">{team.name}</span>
+                    <span className="text-xs text-gray-400">{team.companyName}</span>
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {getTeamSelectedCount(team.id)}/{team.facilities.length}
+                    </span>
+                  </label>
+                ))}
+                {/* Facility View */}
+                {facilityViewMode === 'facility' && facilities.map(facility => (
                   <label key={facility.id} className="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
                     <input
                       type="checkbox"
@@ -547,7 +742,7 @@ export function UserManagement() {
                       className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span className="text-sm">{facility.name}</span>
-                    <span className="text-xs text-gray-400">{facility.company?.name}</span>
+                    <span className="text-xs text-gray-400">{facility.team?.name}</span>
                   </label>
                 ))}
               </div>
@@ -632,11 +827,88 @@ export function UserManagement() {
           </div>
           {showFacilityAssignment && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assign Facilities ({formData.facilityIds.length} selected)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Assign Facilities ({formData.facilityIds.length} selected)
+                </label>
+                <div className="flex rounded-md border border-gray-300 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('company')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 ${
+                      facilityViewMode === 'company'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Building2 className="h-3 w-3" /> Company
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('team')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 border-l border-r border-gray-300 ${
+                      facilityViewMode === 'team'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Users className="h-3 w-3" /> Team
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityViewMode('facility')}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 ${
+                      facilityViewMode === 'facility'
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <MapPin className="h-3 w-3" /> Facility
+                  </button>
+                </div>
+              </div>
               <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto p-2">
-                {facilities.map(facility => (
+                {/* Company View */}
+                {facilityViewMode === 'company' && facilitiesByCompany.map(company => (
+                  <label key={company.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isCompanyFullySelected(company.id)}
+                      ref={el => {
+                        if (el) el.indeterminate = isCompanyPartiallySelected(company.id);
+                      }}
+                      onChange={() => toggleCompany(company.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <Building2 className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm font-medium">{company.name}</span>
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {getCompanySelectedCount(company.id)}/{company.facilities.length} facilities
+                    </span>
+                  </label>
+                ))}
+                {/* Team View */}
+                {facilityViewMode === 'team' && facilitiesByTeam.map(team => (
+                  <label key={team.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isTeamFullySelected(team.id)}
+                      ref={el => {
+                        if (el) el.indeterminate = isTeamPartiallySelected(team.id);
+                      }}
+                      onChange={() => toggleTeam(team.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <Users className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm">{team.name}</span>
+                    <span className="text-xs text-gray-400">{team.companyName}</span>
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {getTeamSelectedCount(team.id)}/{team.facilities.length}
+                    </span>
+                  </label>
+                ))}
+                {/* Facility View */}
+                {facilityViewMode === 'facility' && facilities.map(facility => (
                   <label key={facility.id} className="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
                     <input
                       type="checkbox"
@@ -645,7 +917,7 @@ export function UserManagement() {
                       className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span className="text-sm">{facility.name}</span>
-                    <span className="text-xs text-gray-400">{facility.company?.name}</span>
+                    <span className="text-xs text-gray-400">{facility.team?.name}</span>
                   </label>
                 ))}
               </div>

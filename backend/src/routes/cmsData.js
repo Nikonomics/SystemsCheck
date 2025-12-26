@@ -1061,4 +1061,630 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
   }
 });
 
+// ============================================================================
+// SURVEY ANALYTICS
+// ============================================================================
+
+/**
+ * GET /api/cms/snf/:ccn/surveys
+ * Get survey history with both health and fire safety surveys
+ */
+router.get('/snf/:ccn/surveys', async (req, res) => {
+  try {
+    const { ccn } = req.params;
+    const pool = getMarketPool();
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        error: 'Market database not available'
+      });
+    }
+
+    // Get health surveys from cms_facility_deficiencies
+    const healthSurveysResult = await pool.query(`
+      SELECT
+        survey_date,
+        survey_type,
+        COUNT(*) as deficiency_count,
+        MAX(scope_severity) as max_severity,
+        'health' as survey_category
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
+      GROUP BY survey_date, survey_type
+      ORDER BY survey_date DESC
+    `, [ccn]);
+
+    // Get fire safety surveys from fire_safety_citations
+    const fireSurveysResult = await pool.query(`
+      SELECT
+        survey_date,
+        survey_type,
+        inspection_cycle as cycle,
+        COUNT(*) as deficiency_count,
+        MAX(scope_severity_code) as max_severity,
+        'fire_safety' as survey_category
+      FROM fire_safety_citations
+      WHERE ccn = $1
+      GROUP BY survey_date, survey_type, inspection_cycle
+      ORDER BY survey_date DESC
+    `, [ccn]);
+
+    // Combine and sort all surveys
+    const allSurveys = [
+      ...healthSurveysResult.rows.map(s => ({
+        surveyDate: s.survey_date,
+        surveyType: s.survey_type,
+        category: 'health',
+        cycle: null,
+        totalDeficiencies: parseInt(s.deficiency_count),
+        maxSeverity: s.max_severity
+      })),
+      ...fireSurveysResult.rows.map(s => ({
+        surveyDate: s.survey_date,
+        surveyType: s.survey_type,
+        category: 'fire_safety',
+        cycle: s.cycle,
+        totalDeficiencies: parseInt(s.deficiency_count),
+        maxSeverity: s.max_severity
+      }))
+    ].sort((a, b) => new Date(b.surveyDate) - new Date(a.surveyDate));
+
+    res.json({
+      success: true,
+      surveys: allSurveys,
+      summary: {
+        totalHealthSurveys: healthSurveysResult.rows.length,
+        totalFireSafetySurveys: fireSurveysResult.rows.length,
+        lastHealthSurvey: healthSurveysResult.rows[0]?.survey_date || null,
+        lastFireSafetySurvey: fireSurveysResult.rows[0]?.survey_date || null
+      }
+    });
+
+  } catch (error) {
+    console.error('[CMS API] Error fetching surveys:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/cms/snf/:ccn/deficiency-analysis
+ * Get aggregated deficiency analysis with category, severity, and trend breakdowns
+ */
+router.get('/snf/:ccn/deficiency-analysis', async (req, res) => {
+  try {
+    const { ccn } = req.params;
+    const { startDate, endDate, surveyType } = req.query;
+    const pool = getMarketPool();
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        error: 'Market database not available'
+      });
+    }
+
+    // Build WHERE clause with filters
+    let whereClause = 'WHERE d.federal_provider_number = $1';
+    const params = [ccn];
+    let paramIndex = 2;
+
+    if (startDate) {
+      whereClause += ` AND d.survey_date >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    if (endDate) {
+      whereClause += ` AND d.survey_date <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+    if (surveyType) {
+      whereClause += ` AND d.survey_type = $${paramIndex}`;
+      params.push(surveyType);
+      paramIndex++;
+    }
+
+    // Get deficiencies by category (using citation_descriptions)
+    const byCategoryResult = await pool.query(`
+      SELECT
+        COALESCE(c.category, 'Unknown') as category,
+        COUNT(*) as count
+      FROM cms_facility_deficiencies d
+      LEFT JOIN citation_descriptions c ON d.deficiency_tag = c.deficiency_tag
+      ${whereClause}
+      GROUP BY c.category
+      ORDER BY count DESC
+    `, params);
+
+    // Get deficiencies by severity
+    const bySeverityResult = await pool.query(`
+      SELECT
+        scope_severity,
+        COUNT(*) as count
+      FROM cms_facility_deficiencies d
+      ${whereClause}
+      GROUP BY scope_severity
+      ORDER BY scope_severity
+    `, params);
+
+    // Get deficiencies by year for trending
+    const byYearResult = await pool.query(`
+      SELECT
+        EXTRACT(YEAR FROM survey_date) as year,
+        COUNT(*) as count
+      FROM cms_facility_deficiencies d
+      ${whereClause}
+      GROUP BY EXTRACT(YEAR FROM survey_date)
+      ORDER BY year DESC
+    `, params);
+
+    // Get top F-tags with descriptions
+    const topTagsResult = await pool.query(`
+      SELECT
+        d.deficiency_tag,
+        COALESCE(c.category, 'Unknown') as category,
+        COALESCE(c.description, d.deficiency_text) as description,
+        COUNT(*) as count,
+        MAX(d.scope_severity) as max_severity
+      FROM cms_facility_deficiencies d
+      LEFT JOIN citation_descriptions c ON d.deficiency_tag = c.deficiency_tag
+      ${whereClause}
+      GROUP BY d.deficiency_tag, c.category, c.description, d.deficiency_text
+      ORDER BY count DESC
+      LIMIT 10
+    `, params);
+
+    // Get total count
+    const totalResult = await pool.query(`
+      SELECT COUNT(*) as total
+      FROM cms_facility_deficiencies d
+      ${whereClause}
+    `, params);
+
+    res.json({
+      success: true,
+      analysis: {
+        totalDeficiencies: parseInt(totalResult.rows[0].total),
+        byCategory: byCategoryResult.rows.map(r => ({
+          category: r.category,
+          count: parseInt(r.count)
+        })),
+        bySeverity: bySeverityResult.rows.map(r => ({
+          severity: r.scope_severity,
+          count: parseInt(r.count)
+        })),
+        byYear: byYearResult.rows.map(r => ({
+          year: parseInt(r.year),
+          count: parseInt(r.count)
+        })),
+        topTags: topTagsResult.rows.map(r => ({
+          tag: r.deficiency_tag,
+          category: r.category,
+          description: r.description?.substring(0, 200) + (r.description?.length > 200 ? '...' : ''),
+          count: parseInt(r.count),
+          maxSeverity: r.max_severity
+        }))
+      },
+      filters: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+        surveyType: surveyType || null
+      }
+    });
+
+  } catch (error) {
+    console.error('[CMS API] Error fetching deficiency analysis:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/cms/snf/:ccn/fire-safety
+ * Get fire safety citations with category breakdown
+ */
+router.get('/snf/:ccn/fire-safety', async (req, res) => {
+  try {
+    const { ccn } = req.params;
+    const pool = getMarketPool();
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        error: 'Market database not available'
+      });
+    }
+
+    // Get all fire safety surveys
+    const surveysResult = await pool.query(`
+      SELECT
+        survey_date,
+        survey_type,
+        inspection_cycle,
+        COUNT(*) as deficiency_count,
+        MAX(scope_severity_code) as max_severity
+      FROM fire_safety_citations
+      WHERE ccn = $1
+      GROUP BY survey_date, survey_type, inspection_cycle
+      ORDER BY survey_date DESC
+    `, [ccn]);
+
+    // Get all fire safety deficiencies
+    const deficienciesResult = await pool.query(`
+      SELECT
+        deficiency_tag,
+        deficiency_prefix,
+        deficiency_category,
+        deficiency_description,
+        scope_severity_code,
+        survey_date,
+        survey_type,
+        deficiency_corrected,
+        correction_date,
+        is_standard_deficiency,
+        is_complaint_deficiency
+      FROM fire_safety_citations
+      WHERE ccn = $1
+      ORDER BY survey_date DESC
+      LIMIT 100
+    `, [ccn]);
+
+    // Get category breakdown (K-tags vs E-tags and subcategories)
+    const categoryBreakdownResult = await pool.query(`
+      SELECT
+        deficiency_prefix,
+        deficiency_category,
+        COUNT(*) as count
+      FROM fire_safety_citations
+      WHERE ccn = $1
+      GROUP BY deficiency_prefix, deficiency_category
+      ORDER BY count DESC
+    `, [ccn]);
+
+    // Separate K-tags (Life Safety Code) from E-tags (Emergency Preparedness)
+    const lifeSafetyDeficiencies = deficienciesResult.rows.filter(d => d.deficiency_prefix === 'K');
+    const emergencyPrepDeficiencies = deficienciesResult.rows.filter(d => d.deficiency_prefix === 'E');
+
+    const categoryBreakdown = {};
+    categoryBreakdownResult.rows.forEach(r => {
+      const key = r.deficiency_category || `${r.deficiency_prefix}-Other`;
+      categoryBreakdown[key] = parseInt(r.count);
+    });
+
+    res.json({
+      success: true,
+      surveys: surveysResult.rows.map(s => ({
+        date: s.survey_date,
+        type: s.survey_type,
+        cycle: s.inspection_cycle,
+        deficiencyCount: parseInt(s.deficiency_count),
+        maxSeverity: s.max_severity
+      })),
+      deficiencies: deficienciesResult.rows.map(d => ({
+        tag: d.deficiency_tag,
+        prefix: d.deficiency_prefix,
+        category: d.deficiency_category,
+        severity: d.scope_severity_code,
+        description: d.deficiency_description,
+        surveyDate: d.survey_date,
+        surveyType: d.survey_type,
+        corrected: d.deficiency_corrected,
+        correctionDate: d.correction_date,
+        isStandard: d.is_standard_deficiency,
+        isComplaint: d.is_complaint_deficiency
+      })),
+      summary: {
+        totalDeficiencies: deficienciesResult.rows.length,
+        lifeSafetyCount: lifeSafetyDeficiencies.length,
+        emergencyPrepCount: emergencyPrepDeficiencies.length,
+        categoryBreakdown
+      }
+    });
+
+  } catch (error) {
+    console.error('[CMS API] Error fetching fire safety data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/cms/snf/:ccn/survey-summary
+ * Get combined survey overview for the Survey Analytics tab
+ */
+router.get('/snf/:ccn/survey-summary', async (req, res) => {
+  try {
+    const { ccn } = req.params;
+    const pool = getMarketPool();
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        error: 'Market database not available'
+      });
+    }
+
+    // Get facility ratings and alerts from snf_facilities
+    const facilityResult = await pool.query(`
+      SELECT
+        overall_rating,
+        health_inspection_rating,
+        quality_measure_rating as qm_rating,
+        staffing_rating,
+        abuse_icon,
+        special_focus_facility as sff_status,
+        sprinkler_status,
+        health_deficiencies as cycle1_health_deficiencies,
+        fire_safety_deficiencies as cycle1_fire_deficiencies,
+        total_fines_amount,
+        total_penalties_amount,
+        penalty_count,
+        most_recent_health_survey_date,
+        certification_date
+      FROM snf_facilities
+      WHERE federal_provider_number = $1
+      LIMIT 1
+    `, [ccn]);
+
+    if (facilityResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+
+    const facility = facilityResult.rows[0];
+
+    // Get last health survey details
+    const lastHealthSurveyResult = await pool.query(`
+      SELECT
+        survey_date,
+        survey_type,
+        COUNT(*) as deficiency_count,
+        MAX(scope_severity) as max_severity
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
+      GROUP BY survey_date, survey_type
+      ORDER BY survey_date DESC
+      LIMIT 1
+    `, [ccn]);
+
+    // Get last fire safety survey details
+    const lastFireSurveyResult = await pool.query(`
+      SELECT
+        survey_date,
+        survey_type,
+        COUNT(*) as deficiency_count,
+        MAX(scope_severity_code) as max_severity
+      FROM fire_safety_citations
+      WHERE ccn = $1
+      GROUP BY survey_date, survey_type
+      ORDER BY survey_date DESC
+      LIMIT 1
+    `, [ccn]);
+
+    // Get cycle 1 deficiency counts (most recent standard survey)
+    const cycle1HealthResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
+        AND is_standard_deficiency = true
+        AND survey_date = (
+          SELECT MAX(survey_date)
+          FROM cms_facility_deficiencies
+          WHERE federal_provider_number = $1
+            AND is_standard_deficiency = true
+        )
+    `, [ccn]);
+
+    const cycle1FireResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM fire_safety_citations
+      WHERE ccn = $1
+        AND inspection_cycle = 1
+    `, [ccn]);
+
+    // Check for alerts
+    const alerts = [];
+
+    if (facility.abuse_icon === 'Y') {
+      alerts.push({ type: 'abuse', message: 'Abuse icon present', severity: 'critical' });
+    }
+    if (facility.sff_status === 'Y' || facility.sff_status === 'SFF') {
+      alerts.push({ type: 'sff', message: 'Special Focus Facility', severity: 'critical' });
+    }
+    if (facility.sff_status === 'Candidate') {
+      alerts.push({ type: 'sff_candidate', message: 'SFF Candidate', severity: 'warning' });
+    }
+
+    // Check if survey is old (> 15 months)
+    const lastSurveyDate = lastHealthSurveyResult.rows[0]?.survey_date;
+    if (lastSurveyDate) {
+      const monthsSinceSurvey = Math.floor(
+        (new Date() - new Date(lastSurveyDate)) / (1000 * 60 * 60 * 24 * 30)
+      );
+      if (monthsSinceSurvey > 15) {
+        alerts.push({
+          type: 'old_survey',
+          message: `Last survey was ${monthsSinceSurvey} months ago`,
+          severity: 'warning'
+        });
+      }
+    }
+
+    if (facility.sprinkler_status === 'No') {
+      alerts.push({ type: 'sprinkler', message: 'No sprinkler system', severity: 'warning' });
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        ratings: {
+          overall: facility.overall_rating,
+          health: facility.health_inspection_rating,
+          qm: facility.qm_rating,
+          staffing: facility.staffing_rating
+        },
+        lastHealthSurvey: lastHealthSurveyResult.rows[0] ? {
+          date: lastHealthSurveyResult.rows[0].survey_date,
+          type: lastHealthSurveyResult.rows[0].survey_type,
+          deficiencyCount: parseInt(lastHealthSurveyResult.rows[0].deficiency_count),
+          maxSeverity: lastHealthSurveyResult.rows[0].max_severity
+        } : null,
+        lastFireSafetySurvey: lastFireSurveyResult.rows[0] ? {
+          date: lastFireSurveyResult.rows[0].survey_date,
+          type: lastFireSurveyResult.rows[0].survey_type,
+          deficiencyCount: parseInt(lastFireSurveyResult.rows[0].deficiency_count),
+          maxSeverity: lastFireSurveyResult.rows[0].max_severity
+        } : null,
+        cycle1Deficiencies: {
+          health: parseInt(cycle1HealthResult.rows[0]?.count || facility.cycle1_health_deficiencies || 0),
+          fireSafety: parseInt(cycle1FireResult.rows[0]?.count || facility.cycle1_fire_deficiencies || 0)
+        },
+        penalties: {
+          totalFines: parseFloat(facility.total_fines_amount) || 0,
+          totalPenalties: parseFloat(facility.total_penalties_amount) || 0,
+          penaltyCount: parseInt(facility.penalty_count) || 0
+        },
+        alerts
+      }
+    });
+
+  } catch (error) {
+    console.error('[CMS API] Error fetching survey summary:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/cms/snf/:ccn/quality-measures
+ * Get quality measure scores with state/national comparisons
+ */
+router.get('/snf/:ccn/quality-measures', async (req, res) => {
+  try {
+    const { ccn } = req.params;
+    const pool = getMarketPool();
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        error: 'Market database not available'
+      });
+    }
+
+    // Get facility QM data - check what QM columns exist in snf_facilities
+    const facilityResult = await pool.query(`
+      SELECT
+        federal_provider_number as ccn,
+        facility_name,
+        state,
+        quality_measure_rating,
+        -- Long-stay measures (if available)
+        ls_pressure_ulcer_rate,
+        ls_falls_with_injury_rate,
+        ls_urinary_catheter_rate,
+        ls_physical_restraint_rate,
+        ls_antipsychotic_rate,
+        ls_adl_decline_rate,
+        -- Short-stay measures (if available)
+        ss_rehospitalization_rate,
+        ss_ed_visit_rate,
+        ss_functional_improvement_rate,
+        ss_discharge_to_community_rate
+      FROM snf_facilities
+      WHERE federal_provider_number = $1
+      LIMIT 1
+    `, [ccn]);
+
+    if (facilityResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+
+    const facility = facilityResult.rows[0];
+
+    // Get state averages for comparison
+    const stateAvgResult = await pool.query(`
+      SELECT
+        AVG(quality_measure_rating) as avg_qm_rating,
+        AVG(ls_pressure_ulcer_rate) as avg_ls_pressure_ulcer,
+        AVG(ls_falls_with_injury_rate) as avg_ls_falls,
+        AVG(ls_urinary_catheter_rate) as avg_ls_catheter,
+        AVG(ls_physical_restraint_rate) as avg_ls_restraint,
+        AVG(ls_antipsychotic_rate) as avg_ls_antipsychotic,
+        AVG(ss_rehospitalization_rate) as avg_ss_rehospital,
+        AVG(ss_ed_visit_rate) as avg_ss_ed_visit,
+        AVG(ss_functional_improvement_rate) as avg_ss_functional,
+        COUNT(*) as facility_count
+      FROM snf_facilities
+      WHERE state = $1
+    `, [facility.state]);
+
+    // Get national averages
+    const nationalAvgResult = await pool.query(`
+      SELECT
+        AVG(quality_measure_rating) as avg_qm_rating,
+        AVG(ls_pressure_ulcer_rate) as avg_ls_pressure_ulcer,
+        AVG(ls_falls_with_injury_rate) as avg_ls_falls,
+        AVG(ls_urinary_catheter_rate) as avg_ls_catheter,
+        AVG(ls_physical_restraint_rate) as avg_ls_restraint,
+        AVG(ls_antipsychotic_rate) as avg_ls_antipsychotic,
+        AVG(ss_rehospitalization_rate) as avg_ss_rehospital,
+        AVG(ss_ed_visit_rate) as avg_ss_ed_visit,
+        AVG(ss_functional_improvement_rate) as avg_ss_functional,
+        COUNT(*) as facility_count
+      FROM snf_facilities
+    `);
+
+    const stateAvg = stateAvgResult.rows[0];
+    const nationalAvg = nationalAvgResult.rows[0];
+
+    // Build quality measures response
+    const buildMeasure = (name, facilityValue, stateValue, nationalValue, lowerIsBetter = true) => ({
+      name,
+      facilityValue: facilityValue ? parseFloat(facilityValue) : null,
+      stateAverage: stateValue ? parseFloat(stateValue) : null,
+      nationalAverage: nationalValue ? parseFloat(nationalValue) : null,
+      lowerIsBetter,
+      comparison: facilityValue && nationalValue ? (
+        lowerIsBetter
+          ? (parseFloat(facilityValue) < parseFloat(nationalValue) ? 'better' : 'worse')
+          : (parseFloat(facilityValue) > parseFloat(nationalValue) ? 'better' : 'worse')
+      ) : null
+    });
+
+    res.json({
+      success: true,
+      facility: {
+        ccn: facility.ccn,
+        name: facility.facility_name,
+        state: facility.state,
+        qmRating: facility.quality_measure_rating
+      },
+      longStayMeasures: [
+        buildMeasure('Pressure Ulcers', facility.ls_pressure_ulcer_rate, stateAvg.avg_ls_pressure_ulcer, nationalAvg.avg_ls_pressure_ulcer),
+        buildMeasure('Falls with Injury', facility.ls_falls_with_injury_rate, stateAvg.avg_ls_falls, nationalAvg.avg_ls_falls),
+        buildMeasure('Urinary Catheter Use', facility.ls_urinary_catheter_rate, stateAvg.avg_ls_catheter, nationalAvg.avg_ls_catheter),
+        buildMeasure('Physical Restraints', facility.ls_physical_restraint_rate, stateAvg.avg_ls_restraint, nationalAvg.avg_ls_restraint),
+        buildMeasure('Antipsychotic Use', facility.ls_antipsychotic_rate, stateAvg.avg_ls_antipsychotic, nationalAvg.avg_ls_antipsychotic)
+      ].filter(m => m.facilityValue !== null),
+      shortStayMeasures: [
+        buildMeasure('Rehospitalization', facility.ss_rehospitalization_rate, stateAvg.avg_ss_rehospital, nationalAvg.avg_ss_rehospital),
+        buildMeasure('ED Visits', facility.ss_ed_visit_rate, stateAvg.avg_ss_ed_visit, nationalAvg.avg_ss_ed_visit),
+        buildMeasure('Functional Improvement', facility.ss_functional_improvement_rate, stateAvg.avg_ss_functional, nationalAvg.avg_ss_functional, false)
+      ].filter(m => m.facilityValue !== null),
+      benchmarks: {
+        state: {
+          name: facility.state,
+          facilityCount: parseInt(stateAvg.facility_count),
+          avgQmRating: parseFloat(stateAvg.avg_qm_rating) || null
+        },
+        national: {
+          facilityCount: parseInt(nationalAvg.facility_count),
+          avgQmRating: parseFloat(nationalAvg.avg_qm_rating) || null
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('[CMS API] Error fetching quality measures:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

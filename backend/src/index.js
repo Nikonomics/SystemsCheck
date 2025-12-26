@@ -84,8 +84,8 @@ async function startServer() {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
-    // Sync models - alter: true adds new columns without dropping data
-    await sequelize.sync({ alter: true });
+    // Sync models - creates tables if they don't exist (doesn't alter existing)
+    await sequelize.sync();
     console.log('Database models synchronized.');
 
     // Start server

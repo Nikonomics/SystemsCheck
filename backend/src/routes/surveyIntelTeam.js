@@ -8,8 +8,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { Op, Sequelize } = require('sequelize');
-const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
+const { getMarketPool } = require('../config/marketDatabase');
 
 // Internal models
 const { 
@@ -47,21 +47,13 @@ const systemNames = {
   7: 'Abuse/Grievances'
 };
 
-// Helper: Get external database connection
-const getExternalDb = () => {
-  // This should use your configured external database connection
-  // Adjust connection details as needed for your setup
-  return new Sequelize(
-    process.env.EXTERNAL_DB_NAME || 'snf_market_data',
-    process.env.EXTERNAL_DB_USER || process.env.DB_USER,
-    process.env.EXTERNAL_DB_PASSWORD || process.env.DB_PASSWORD,
-    {
-      host: process.env.EXTERNAL_DB_HOST || process.env.DB_HOST,
-      port: process.env.EXTERNAL_DB_PORT || process.env.DB_PORT,
-      dialect: 'postgres',
-      logging: false
-    }
-  );
+// Helper: Get market database pool
+const getExternalPool = () => {
+  const pool = getMarketPool();
+  if (!pool) {
+    throw new Error('Market database not configured');
+  }
+  return pool;
 };
 
 // Helper: Calculate risk score for a facility
@@ -141,7 +133,7 @@ const getGapAlert = (cmsRiskLevel, scorecardAvg) => {
 router.get('/team/:teamId/summary', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     // Get team facilities
     const team = await Team.findByPk(teamId, {
@@ -176,21 +168,18 @@ router.get('/team/:teamId/summary', async (req, res) => {
     const threeYearsAgo = new Date();
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
-    const [deficiencies] = await externalDb.query(`
-      SELECT 
+    const { rows: deficiencies } = await pool.query(`
+      SELECT
         d.federal_provider_number,
         d.deficiency_tag,
         d.scope_severity,
         d.survey_date,
         d.survey_type
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
-        AND d.survey_date >= :threeYearsAgo
+      WHERE d.federal_provider_number = ANY($1)
+        AND d.survey_date >= $2
       ORDER BY d.survey_date DESC
-    `, {
-      replacements: { ccns, threeYearsAgo },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns, threeYearsAgo.toISOString()]);
 
     // Calculate risk per facility
     const facilityRisks = [];
@@ -235,7 +224,7 @@ router.get('/team/:teamId/summary', async (req, res) => {
       ? Math.floor((new Date() - new Date(mostRecentCitation)) / (1000 * 60 * 60 * 24))
       : null;
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,
@@ -262,7 +251,7 @@ router.get('/team/:teamId/summary', async (req, res) => {
 router.get('/team/:teamId/facilities', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     // Get team facilities with recent scorecards
     const team = await Team.findByPk(teamId, {
@@ -274,7 +263,7 @@ router.get('/team/:teamId/facilities', async (req, res) => {
           model: Scorecard,
           as: 'scorecards',
           limit: 3,
-          order: [['auditDate', 'DESC']],
+          order: [['year', 'DESC'], ['month', 'DESC']],
           include: [{
             model: ScorecardSystem,
             as: 'systems'
@@ -290,20 +279,17 @@ router.get('/team/:teamId/facilities', async (req, res) => {
     const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
 
     // Get CMS data
-    const [deficiencies] = await externalDb.query(`
-      SELECT 
+    const { rows: deficiencies } = await pool.query(`
+      SELECT
         d.federal_provider_number,
         d.deficiency_tag,
         d.scope_severity,
         d.survey_date
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
+      WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= NOW() - INTERVAL '3 years'
       ORDER BY d.survey_date DESC
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns]);
 
     // Build facility comparison data
     const facilities = team.facilities.map(facility => {
@@ -367,7 +353,7 @@ router.get('/team/:teamId/facilities', async (req, res) => {
     // Sort by risk score
     facilities.sort((a, b) => b.riskScore - a.riskScore);
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,
@@ -388,7 +374,7 @@ router.get('/team/:teamId/facilities', async (req, res) => {
 router.get('/team/:teamId/gap-analysis', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     // Get team facilities with scorecards
     const team = await Team.findByPk(teamId, {
@@ -400,7 +386,7 @@ router.get('/team/:teamId/gap-analysis', async (req, res) => {
           model: Scorecard,
           as: 'scorecards',
           limit: 1,
-          order: [['auditDate', 'DESC']],
+          order: [['year', 'DESC'], ['month', 'DESC']],
           include: [{
             model: ScorecardSystem,
             as: 'systems'
@@ -416,19 +402,16 @@ router.get('/team/:teamId/gap-analysis', async (req, res) => {
     const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
 
     // Get CMS deficiencies (last 2 years)
-    const [deficiencies] = await externalDb.query(`
-      SELECT 
+    const { rows: deficiencies } = await pool.query(`
+      SELECT
         d.federal_provider_number,
         d.deficiency_tag,
         d.scope_severity,
         d.survey_date
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
+      WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= NOW() - INTERVAL '2 years'
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns]);
 
     // Initialize systems analysis
     const systemsAnalysis = {};
@@ -514,7 +497,7 @@ router.get('/team/:teamId/gap-analysis', async (req, res) => {
     const alertPriority = { 'URGENT': 0, 'ATTENTION': 1, 'MONITOR': 2, 'IMPROVE': 3, 'NO_DATA': 4, 'STRONG': 5 };
     analysis.sort((a, b) => alertPriority[a.gapAlert.alert] - alertPriority[b.gapAlert.alert]);
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,
@@ -536,7 +519,7 @@ router.get('/team/:teamId/gap-analysis', async (req, res) => {
 router.get('/team/:teamId/common-issues', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     const team = await Team.findByPk(teamId, {
       include: [{
@@ -553,20 +536,17 @@ router.get('/team/:teamId/common-issues', async (req, res) => {
     const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
 
     // Get deficiencies grouped by tag and facility
-    const [deficiencies] = await externalDb.query(`
-      SELECT 
+    const { rows: deficiencies } = await pool.query(`
+      SELECT
         d.deficiency_tag,
         d.federal_provider_number,
         d.scope_severity,
         d.survey_date
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
+      WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= NOW() - INTERVAL '2 years'
       ORDER BY d.survey_date DESC
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns]);
 
     // Group by tag and count unique facilities
     const tagAnalysis = {};
@@ -617,7 +597,7 @@ router.get('/team/:teamId/common-issues', async (req, res) => {
       })
       .sort((a, b) => b.facilitiesAffected - a.facilitiesAffected || b.totalCitations - a.totalCitations);
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,
@@ -642,7 +622,7 @@ router.get('/team/:teamId/common-issues', async (req, res) => {
 router.get('/team/:teamId/market-comparison', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     const team = await Team.findByPk(teamId, {
       include: [{
@@ -659,32 +639,26 @@ router.get('/team/:teamId/market-comparison', async (req, res) => {
     const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
 
     // Get team facilities' state
-    const [facilityInfo] = await externalDb.query(`
-      SELECT DISTINCT state 
-      FROM snf_facilities 
-      WHERE federal_provider_number IN (:ccns)
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    const { rows: facilityInfo } = await pool.query(`
+      SELECT DISTINCT state
+      FROM snf_facilities
+      WHERE federal_provider_number = ANY($1)
+    `, [ccns]);
 
     const states = facilityInfo.map(f => f.state);
     const primaryState = states[0] || 'Unknown';
 
     // Team metrics
-    const [teamDefs] = await externalDb.query(`
-      SELECT 
+    const { rows: teamDefs } = await pool.query(`
+      SELECT
         d.federal_provider_number,
         d.deficiency_tag,
         d.scope_severity,
         d.survey_date
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
+      WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= NOW() - INTERVAL '1 year'
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns]);
 
     const teamCitationsPerFacility = ccns.length > 0 
       ? teamDefs.length / ccns.length 
@@ -698,19 +672,16 @@ router.get('/team/:teamId/market-comparison', async (req, res) => {
       : 0;
 
     // State averages
-    const [stateDefs] = await externalDb.query(`
-      SELECT 
+    const { rows: stateDefs } = await pool.query(`
+      SELECT
         COUNT(*) as total_citations,
         COUNT(DISTINCT d.federal_provider_number) as facility_count,
         SUM(CASE WHEN d.scope_severity ~ '[JKL]' THEN 1 ELSE 0 END) as ij_count
       FROM cms_facility_deficiencies d
       JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
-      WHERE f.state = :state
+      WHERE f.state = $1
         AND d.survey_date >= NOW() - INTERVAL '1 year'
-    `, {
-      replacements: { state: primaryState },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [primaryState]);
 
     const stateData = stateDefs[0] || { total_citations: 0, facility_count: 1, ij_count: 0 };
     const stateCitationsPerFacility = stateData.facility_count > 0 
@@ -721,16 +692,14 @@ router.get('/team/:teamId/market-comparison', async (req, res) => {
       : 0;
 
     // National averages (approximate)
-    const [nationalDefs] = await externalDb.query(`
-      SELECT 
+    const { rows: nationalDefs } = await pool.query(`
+      SELECT
         COUNT(*) as total_citations,
         COUNT(DISTINCT federal_provider_number) as facility_count,
         SUM(CASE WHEN scope_severity ~ '[JKL]' THEN 1 ELSE 0 END) as ij_count
       FROM cms_facility_deficiencies
       WHERE survey_date >= NOW() - INTERVAL '1 year'
-    `, {
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `);
 
     const nationalData = nationalDefs[0] || { total_citations: 0, facility_count: 1, ij_count: 0 };
     const nationalCitationsPerFacility = nationalData.facility_count > 0 
@@ -740,7 +709,7 @@ router.get('/team/:teamId/market-comparison', async (req, res) => {
       ? (nationalData.ij_count / nationalData.facility_count) * 100 
       : 0;
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,
@@ -786,9 +755,18 @@ router.get('/team/:teamId/scorecard-trends', async (req, res) => {
           model: Scorecard,
           as: 'scorecards',
           where: {
-            auditDate: {
-              [Op.gte]: new Date(new Date().setMonth(new Date().getMonth() - 6))
-            }
+            [Op.or]: [
+              // Current year, recent months
+              {
+                year: new Date().getFullYear(),
+                month: { [Op.gte]: new Date().getMonth() - 5 }
+              },
+              // Previous year if we're in early months
+              {
+                year: new Date().getFullYear() - 1,
+                month: { [Op.gte]: new Date().getMonth() + 7 }
+              }
+            ]
           },
           required: false,
           include: [{
@@ -809,7 +787,7 @@ router.get('/team/:teamId/scorecard-trends', async (req, res) => {
 
     team.facilities.forEach(facility => {
       facility.scorecards?.forEach(scorecard => {
-        const monthKey = scorecard.auditDate.toISOString().slice(0, 7); // YYYY-MM
+        const monthKey = `${scorecard.year}-${String(scorecard.month).padStart(2, '0')}`; // YYYY-MM
         
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = [];
@@ -892,7 +870,7 @@ router.get('/team/:teamId/scorecard-trends', async (req, res) => {
 router.get('/team/:teamId/recommendations', async (req, res) => {
   try {
     const { teamId } = req.params;
-    const externalDb = getExternalDb();
+    const pool = getExternalPool();
 
     const team = await Team.findByPk(teamId, {
       include: [{
@@ -903,7 +881,7 @@ router.get('/team/:teamId/recommendations', async (req, res) => {
           model: Scorecard,
           as: 'scorecards',
           limit: 1,
-          order: [['auditDate', 'DESC']],
+          order: [['year', 'DESC'], ['month', 'DESC']],
           include: [{
             model: ScorecardSystem,
             as: 'systems'
@@ -919,19 +897,16 @@ router.get('/team/:teamId/recommendations', async (req, res) => {
     const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
 
     // Get recent deficiencies
-    const [deficiencies] = await externalDb.query(`
-      SELECT 
+    const { rows: deficiencies } = await pool.query(`
+      SELECT
         d.federal_provider_number,
         d.deficiency_tag,
         d.scope_severity,
         d.survey_date
       FROM cms_facility_deficiencies d
-      WHERE d.federal_provider_number IN (:ccns)
+      WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= NOW() - INTERVAL '2 years'
-    `, {
-      replacements: { ccns },
-      type: Sequelize.QueryTypes.SELECT
-    });
+    `, [ccns]);
 
     const recommendations = {
       critical: [],
@@ -1011,7 +986,7 @@ router.get('/team/:teamId/recommendations', async (req, res) => {
       }
     });
 
-    await externalDb.close();
+    // Pool is reused, no close needed
 
     res.json({
       teamId,

@@ -16,7 +16,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm install && npm run db:migrate
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

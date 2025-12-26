@@ -129,8 +129,12 @@ export function ScorecardForm() {
     // Capture the items we're saving so we only clear those
     const savedItemIds = Object.keys(changes.items || {});
 
+    // Debug logging for production diagnosis
+    console.log('[Save] Saving changes:', JSON.stringify(changes));
+
     try {
       await scorecardsApi.update(scorecard.id, changes);
+      console.log('[Save] Save successful for items:', savedItemIds);
 
       // Only clear the specific changes that were saved, not overwrite local state
       // This prevents race conditions where new changes made during save are lost
@@ -143,7 +147,8 @@ export function ScorecardForm() {
 
       setSaveStatus('saved');
     } catch (err) {
-      console.error('Error saving:', err);
+      console.error('[Save] Error saving:', err);
+      console.error('[Save] Failed changes:', JSON.stringify(changes));
       setSaveStatus('error');
       toast.error('Failed to save changes. Click to retry.', 0);
     }
@@ -200,6 +205,8 @@ export function ScorecardForm() {
 
   // Handle item change
   const handleItemChange = useCallback((itemId, changes) => {
+    console.log('[ItemChange] Item:', itemId, 'Changes:', changes);
+
     setScorecard(prev => {
       if (!prev || !prev.systems) return prev;
 

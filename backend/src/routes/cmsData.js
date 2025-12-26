@@ -1412,14 +1412,11 @@ router.get('/snf/:ccn/survey-summary', async (req, res) => {
         staffing_rating,
         abuse_icon,
         special_focus_facility as sff_status,
-        sprinkler_status,
+        has_sprinkler_system,
         health_deficiencies as cycle1_health_deficiencies,
         fire_safety_deficiencies as cycle1_fire_deficiencies,
         total_fines_amount,
-        total_penalties_amount,
-        penalty_count,
-        most_recent_health_survey_date,
-        certification_date
+        penalty_count
       FROM snf_facilities
       WHERE federal_provider_number = $1
       LIMIT 1
@@ -1508,7 +1505,7 @@ router.get('/snf/:ccn/survey-summary', async (req, res) => {
       }
     }
 
-    if (facility.sprinkler_status === 'No') {
+    if (facility.has_sprinkler_system === false || facility.has_sprinkler_system === 'No') {
       alerts.push({ type: 'sprinkler', message: 'No sprinkler system', severity: 'warning' });
     }
 
@@ -1539,7 +1536,6 @@ router.get('/snf/:ccn/survey-summary', async (req, res) => {
         },
         penalties: {
           totalFines: parseFloat(facility.total_fines_amount) || 0,
-          totalPenalties: parseFloat(facility.total_penalties_amount) || 0,
           penaltyCount: parseInt(facility.penalty_count) || 0
         },
         alerts
@@ -1568,25 +1564,15 @@ router.get('/snf/:ccn/quality-measures', async (req, res) => {
       });
     }
 
-    // Get facility QM data - check what QM columns exist in snf_facilities
+    // Get facility QM data from snf_facilities
     const facilityResult = await pool.query(`
       SELECT
         federal_provider_number as ccn,
         facility_name,
         state,
         quality_measure_rating,
-        -- Long-stay measures (if available)
-        ls_pressure_ulcer_rate,
-        ls_falls_with_injury_rate,
-        ls_urinary_catheter_rate,
-        ls_physical_restraint_rate,
-        ls_antipsychotic_rate,
-        ls_adl_decline_rate,
-        -- Short-stay measures (if available)
-        ss_rehospitalization_rate,
-        ss_ed_visit_rate,
-        ss_functional_improvement_rate,
-        ss_discharge_to_community_rate
+        long_stay_qm_rating,
+        short_stay_qm_rating
       FROM snf_facilities
       WHERE federal_provider_number = $1
       LIMIT 1
@@ -1602,14 +1588,8 @@ router.get('/snf/:ccn/quality-measures', async (req, res) => {
     const stateAvgResult = await pool.query(`
       SELECT
         AVG(quality_measure_rating) as avg_qm_rating,
-        AVG(ls_pressure_ulcer_rate) as avg_ls_pressure_ulcer,
-        AVG(ls_falls_with_injury_rate) as avg_ls_falls,
-        AVG(ls_urinary_catheter_rate) as avg_ls_catheter,
-        AVG(ls_physical_restraint_rate) as avg_ls_restraint,
-        AVG(ls_antipsychotic_rate) as avg_ls_antipsychotic,
-        AVG(ss_rehospitalization_rate) as avg_ss_rehospital,
-        AVG(ss_ed_visit_rate) as avg_ss_ed_visit,
-        AVG(ss_functional_improvement_rate) as avg_ss_functional,
+        AVG(long_stay_qm_rating) as avg_long_stay_qm,
+        AVG(short_stay_qm_rating) as avg_short_stay_qm,
         COUNT(*) as facility_count
       FROM snf_facilities
       WHERE state = $1
@@ -1619,14 +1599,8 @@ router.get('/snf/:ccn/quality-measures', async (req, res) => {
     const nationalAvgResult = await pool.query(`
       SELECT
         AVG(quality_measure_rating) as avg_qm_rating,
-        AVG(ls_pressure_ulcer_rate) as avg_ls_pressure_ulcer,
-        AVG(ls_falls_with_injury_rate) as avg_ls_falls,
-        AVG(ls_urinary_catheter_rate) as avg_ls_catheter,
-        AVG(ls_physical_restraint_rate) as avg_ls_restraint,
-        AVG(ls_antipsychotic_rate) as avg_ls_antipsychotic,
-        AVG(ss_rehospitalization_rate) as avg_ss_rehospital,
-        AVG(ss_ed_visit_rate) as avg_ss_ed_visit,
-        AVG(ss_functional_improvement_rate) as avg_ss_functional,
+        AVG(long_stay_qm_rating) as avg_long_stay_qm,
+        AVG(short_stay_qm_rating) as avg_short_stay_qm,
         COUNT(*) as facility_count
       FROM snf_facilities
     `);
@@ -1634,49 +1608,29 @@ router.get('/snf/:ccn/quality-measures', async (req, res) => {
     const stateAvg = stateAvgResult.rows[0];
     const nationalAvg = nationalAvgResult.rows[0];
 
-    // Build quality measures response
-    const buildMeasure = (name, facilityValue, stateValue, nationalValue, lowerIsBetter = true) => ({
-      name,
-      facilityValue: facilityValue ? parseFloat(facilityValue) : null,
-      stateAverage: stateValue ? parseFloat(stateValue) : null,
-      nationalAverage: nationalValue ? parseFloat(nationalValue) : null,
-      lowerIsBetter,
-      comparison: facilityValue && nationalValue ? (
-        lowerIsBetter
-          ? (parseFloat(facilityValue) < parseFloat(nationalValue) ? 'better' : 'worse')
-          : (parseFloat(facilityValue) > parseFloat(nationalValue) ? 'better' : 'worse')
-      ) : null
-    });
-
     res.json({
       success: true,
       facility: {
         ccn: facility.ccn,
         name: facility.facility_name,
         state: facility.state,
-        qmRating: facility.quality_measure_rating
+        qmRating: facility.quality_measure_rating,
+        longStayQmRating: facility.long_stay_qm_rating,
+        shortStayQmRating: facility.short_stay_qm_rating
       },
-      longStayMeasures: [
-        buildMeasure('Pressure Ulcers', facility.ls_pressure_ulcer_rate, stateAvg.avg_ls_pressure_ulcer, nationalAvg.avg_ls_pressure_ulcer),
-        buildMeasure('Falls with Injury', facility.ls_falls_with_injury_rate, stateAvg.avg_ls_falls, nationalAvg.avg_ls_falls),
-        buildMeasure('Urinary Catheter Use', facility.ls_urinary_catheter_rate, stateAvg.avg_ls_catheter, nationalAvg.avg_ls_catheter),
-        buildMeasure('Physical Restraints', facility.ls_physical_restraint_rate, stateAvg.avg_ls_restraint, nationalAvg.avg_ls_restraint),
-        buildMeasure('Antipsychotic Use', facility.ls_antipsychotic_rate, stateAvg.avg_ls_antipsychotic, nationalAvg.avg_ls_antipsychotic)
-      ].filter(m => m.facilityValue !== null),
-      shortStayMeasures: [
-        buildMeasure('Rehospitalization', facility.ss_rehospitalization_rate, stateAvg.avg_ss_rehospital, nationalAvg.avg_ss_rehospital),
-        buildMeasure('ED Visits', facility.ss_ed_visit_rate, stateAvg.avg_ss_ed_visit, nationalAvg.avg_ss_ed_visit),
-        buildMeasure('Functional Improvement', facility.ss_functional_improvement_rate, stateAvg.avg_ss_functional, nationalAvg.avg_ss_functional, false)
-      ].filter(m => m.facilityValue !== null),
       benchmarks: {
         state: {
           name: facility.state,
           facilityCount: parseInt(stateAvg.facility_count),
-          avgQmRating: parseFloat(stateAvg.avg_qm_rating) || null
+          avgQmRating: parseFloat(stateAvg.avg_qm_rating) || null,
+          avgLongStayQm: parseFloat(stateAvg.avg_long_stay_qm) || null,
+          avgShortStayQm: parseFloat(stateAvg.avg_short_stay_qm) || null
         },
         national: {
           facilityCount: parseInt(nationalAvg.facility_count),
-          avgQmRating: parseFloat(nationalAvg.avg_qm_rating) || null
+          avgQmRating: parseFloat(nationalAvg.avg_qm_rating) || null,
+          avgLongStayQm: parseFloat(nationalAvg.avg_long_stay_qm) || null,
+          avgShortStayQm: parseFloat(nationalAvg.avg_short_stay_qm) || null
         }
       }
     });

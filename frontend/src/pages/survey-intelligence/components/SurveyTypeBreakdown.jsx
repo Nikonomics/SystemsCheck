@@ -25,6 +25,7 @@ import {
   Shield
 } from 'lucide-react';
 import { SurveyTimelineVisual } from './SurveyTimelineVisual';
+import { useTagClick } from './TagClickContext';
 
 /**
  * Severity badge component
@@ -100,7 +101,7 @@ const SURVEY_TYPE_CONFIG = {
 /**
  * Individual survey type card
  */
-const SurveyTypeCard = ({ type, data, config, defaultExpanded = false }) => {
+const SurveyTypeCard = ({ type, data, config, defaultExpanded = false, onTagClick }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const Icon = config.icon;
 
@@ -225,7 +226,12 @@ const SurveyTypeCard = ({ type, data, config, defaultExpanded = false }) => {
                   <div key={tag.tag} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg" title={tag.tagDescription}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+                        <button
+                          onClick={() => onTagClick?.(tag.tag)}
+                          className="font-mono text-sm font-medium text-purple-700 hover:text-purple-900 hover:underline cursor-pointer"
+                        >
+                          {tag.tagFormatted || tag.tag}
+                        </button>
                         {tag.systemName && (
                           <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded flex-shrink-0">
                             {tag.systemName}
@@ -293,6 +299,28 @@ const SurveyTypeCard = ({ type, data, config, defaultExpanded = false }) => {
 };
 
 export function SurveyTypeBreakdown({ data, loading, error }) {
+  const { onTagClick } = useTagClick();
+
+  // Combine all surveys for the visual timeline - must be before conditionals
+  const allSurveys = useMemo(() => {
+    if (!data?.hasData || !data?.surveyTypes) return [];
+    const { surveyTypes } = data;
+    const surveys = [];
+    if (surveyTypes.standard?.surveys) {
+      surveyTypes.standard.surveys.forEach(s => surveys.push({ ...s, type: 'standard' }));
+    }
+    if (surveyTypes.complaint?.surveys) {
+      surveyTypes.complaint.surveys.forEach(s => surveys.push({ ...s, type: 'complaint' }));
+    }
+    if (surveyTypes.fireSafety?.surveys) {
+      surveyTypes.fireSafety.surveys.forEach(s => surveys.push({ ...s, type: 'fireSafety' }));
+    }
+    if (surveyTypes.infectionControl?.surveys) {
+      surveyTypes.infectionControl.surveys.forEach(s => surveys.push({ ...s, type: 'infectionControl' }));
+    }
+    return surveys.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [data]);
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -334,24 +362,6 @@ export function SurveyTypeBreakdown({ data, loading, error }) {
 
   const { surveyTypes, summary } = data;
 
-  // Combine all surveys for the visual timeline
-  const allSurveys = useMemo(() => {
-    const surveys = [];
-    if (surveyTypes.standard?.surveys) {
-      surveyTypes.standard.surveys.forEach(s => surveys.push({ ...s, type: 'standard' }));
-    }
-    if (surveyTypes.complaint?.surveys) {
-      surveyTypes.complaint.surveys.forEach(s => surveys.push({ ...s, type: 'complaint' }));
-    }
-    if (surveyTypes.fireSafety?.surveys) {
-      surveyTypes.fireSafety.surveys.forEach(s => surveys.push({ ...s, type: 'fireSafety' }));
-    }
-    if (surveyTypes.infectionControl?.surveys) {
-      surveyTypes.infectionControl.surveys.forEach(s => surveys.push({ ...s, type: 'infectionControl' }));
-    }
-    return surveys.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [surveyTypes]);
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
@@ -378,21 +388,25 @@ export function SurveyTypeBreakdown({ data, loading, error }) {
           type="standard"
           data={surveyTypes.standard}
           config={SURVEY_TYPE_CONFIG.standard}
+          onTagClick={onTagClick}
         />
         <SurveyTypeCard
           type="complaint"
           data={surveyTypes.complaint}
           config={SURVEY_TYPE_CONFIG.complaint}
+          onTagClick={onTagClick}
         />
         <SurveyTypeCard
           type="infectionControl"
           data={surveyTypes.infectionControl}
           config={SURVEY_TYPE_CONFIG.infectionControl}
+          onTagClick={onTagClick}
         />
         <SurveyTypeCard
           type="fireSafety"
           data={surveyTypes.fireSafety}
           config={SURVEY_TYPE_CONFIG.fireSafety}
+          onTagClick={onTagClick}
         />
       </div>
     </div>

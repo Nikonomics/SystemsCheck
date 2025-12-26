@@ -23,6 +23,7 @@ import { ClinicalSystemsBreakdown } from './components/ClinicalSystemsBreakdown'
 import { MarketContext } from './components/MarketContext';
 import { SurveyTypeBreakdown } from './components/SurveyTypeBreakdown';
 import { SurveyTimeline } from './components/SurveyTimeline';
+import { TagClickProvider } from './components/TagClickContext';
 
 export function FacilityIntelligence() {
   // State
@@ -297,96 +298,113 @@ export function FacilityIntelligence() {
 
       {/* Main Content */}
       {selectedFacility && selectedFacility.ccn && (
-        <div className="space-y-6">
-          {/* Facility Header */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">{selectedFacility.name}</h2>
-                <p className="text-sm text-gray-500">
-                  {selectedFacility.city}, {selectedFacility.state} • CCN: {selectedFacility.ccn}
-                </p>
-              </div>
-              {riskData?.hasData && (
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Risk Level</p>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                    riskData.riskScore.level === 'low' ? 'bg-green-100 text-green-800' :
-                    riskData.riskScore.level === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {riskData.riskScore.level === 'low' ? 'Low' :
-                     riskData.riskScore.level === 'moderate' ? 'Moderate' : 'High'}
-                  </span>
+        <TagClickProvider
+          facilityId={selectedFacility.id}
+          state={selectedFacility.state}
+        >
+          <div className="space-y-6">
+            {/* Facility Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">{selectedFacility.name}</h2>
+                  <p className="text-sm text-gray-500">
+                    {selectedFacility.city}, {selectedFacility.state} • CCN: {selectedFacility.ccn}
+                  </p>
                 </div>
-              )}
+                {riskData?.hasData && (
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">Risk Level</p>
+                    <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                      riskData.riskScore.level === 'low' ? 'bg-green-100 text-green-800' :
+                      riskData.riskScore.level === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {riskData.riskScore.level === 'low' ? 'Low' :
+                       riskData.riskScore.level === 'moderate' ? 'Moderate' : 'High'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Risk Score (1/3 width) */}
-            <div className="lg:col-span-1">
-              <RiskScoreCard
-                data={riskData}
-                loading={loadingRisk}
-                error={riskError}
+            {/* Two Column Layout */}
+            <div id="risk-score" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column - Risk Score (1/3 width) */}
+              <div className="lg:col-span-1">
+                <RiskScoreCard
+                  data={riskData}
+                  loading={loadingRisk}
+                  error={riskError}
+                />
+              </div>
+
+              {/* Right Column - Trends (2/3 width) */}
+              <div id="deficiency-trends" className="lg:col-span-2">
+                <TrendsSummary
+                  data={trendsData}
+                  loading={loadingTrends}
+                  error={trendsError}
+                />
+              </div>
+            </div>
+
+            {/* Section 2: Recommendations */}
+            <div id="recommendations">
+              <Recommendations
+                riskData={riskData}
+                trendsData={trendsData}
+                loading={loadingRisk || loadingTrends}
+                error={riskError || trendsError}
               />
             </div>
 
-            {/* Right Column - Trends (2/3 width) */}
-            <div className="lg:col-span-2">
-              <TrendsSummary
-                data={trendsData}
-                loading={loadingTrends}
-                error={trendsError}
+            {/* Section 3: Clinical Systems Breakdown */}
+            <div id="clinical-systems">
+              <ClinicalSystemsBreakdown
+                data={systemRiskData}
+                loading={loadingSystemRisk}
+                error={systemRiskError}
+              />
+            </div>
+
+            {/* Section 4: Tags Heatmap */}
+            <div id="tags-heatmap">
+              <TagsHeatmap
+                data={heatmapData}
+                loading={loadingHeatmap}
+                error={heatmapError}
+              />
+            </div>
+
+            {/* Section 5: Market Context */}
+            <div id="market-context">
+              <MarketContext
+                data={marketContextData}
+                loading={loadingMarketContext}
+                error={marketContextError}
+              />
+            </div>
+
+            {/* Section 6: Survey Type Breakdown */}
+            <div id="survey-types">
+              <SurveyTypeBreakdown
+                data={surveyTypeData}
+                loading={loadingSurveyType}
+                error={surveyTypeError}
+              />
+            </div>
+
+            {/* Section 7: Survey Timeline */}
+            <div id="survey-timeline">
+              <SurveyTimeline
+                data={timelineData}
+                loading={loadingTimeline}
+                error={timelineError}
               />
             </div>
           </div>
-
-          {/* Section 2: Recommendations */}
-          <Recommendations
-            riskData={riskData}
-            trendsData={trendsData}
-            loading={loadingRisk || loadingTrends}
-            error={riskError || trendsError}
-          />
-
-          {/* Section 3: Clinical Systems Breakdown */}
-          <ClinicalSystemsBreakdown
-            data={systemRiskData}
-            loading={loadingSystemRisk}
-            error={systemRiskError}
-          />
-
-          {/* Section 4: Tags Heatmap */}
-          <TagsHeatmap
-            data={heatmapData}
-            loading={loadingHeatmap}
-            error={heatmapError}
-          />
-
-          {/* Section 5: Market Context */}
-          <MarketContext
-            data={marketContextData}
-            loading={loadingMarketContext}
-            error={marketContextError}
-          />
-
-          {/* Section 6: Survey Type Breakdown */}
-          <SurveyTypeBreakdown
-            data={surveyTypeData}
-            loading={loadingSurveyType}
-            error={surveyTypeError}
-          />
-
-          {/* Section 7: Survey Timeline */}
-          <SurveyTimeline
-            data={timelineData}
-            loading={loadingTimeline}
-            error={timelineError}
-          />
-        </div>
+        </TagClickProvider>
       )}
     </div>
   );

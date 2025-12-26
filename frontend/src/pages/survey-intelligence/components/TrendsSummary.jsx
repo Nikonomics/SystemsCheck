@@ -3,7 +3,7 @@
  *
  * Displays deficiency trend categories:
  * - Worsening (severity increased)
- * - Persistent (same severity across surveys)
+ * - Stagnant (same severity across surveys - not improving)
  * - Improving (severity decreased)
  * - Resolved (not in most recent survey)
  */
@@ -19,6 +19,7 @@ import {
   Info
 } from 'lucide-react';
 import { TrendsTakeaway } from './SectionTakeaway';
+import { useTagClick } from './TagClickContext';
 
 /**
  * Trend category card
@@ -46,18 +47,18 @@ const TrendCard = ({ trend, count, tags, color, icon: Icon, label, description, 
       <p className="text-xs mt-1 opacity-75">{description}</p>
       {tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {tags.slice(0, 3).map(tag => (
+          {tags.slice(0, 4).map(tag => (
             <span
               key={tag.tag}
-              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/50"
-              title={tag.tagDescription || tag.tagName}
+              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-white/50 cursor-help"
+              title={tag.tagName && tag.tagName !== 'Unknown Tag' ? `${tag.tagFormatted || tag.tag}: ${tag.tagName}` : (tag.tagDescription || tag.tagFormatted || tag.tag)}
             >
-              {tag.tagFormatted || tag.tag} {tag.tagName && tag.tagName !== 'Unknown Tag' ? `- ${tag.tagName.substring(0, 25)}${tag.tagName.length > 25 ? '...' : ''}` : ''}
+              {tag.tagFormatted || tag.tag}
             </span>
           ))}
-          {tags.length > 3 && (
+          {tags.length > 4 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500">
-              +{tags.length - 3} more
+              +{tags.length - 4}
             </span>
           )}
         </div>
@@ -69,12 +70,18 @@ const TrendCard = ({ trend, count, tags, color, icon: Icon, label, description, 
 /**
  * Tag detail row in expanded view
  */
-const TagRow = ({ tag }) => {
+const TagRow = ({ tag, onTagClick }) => {
   return (
-    <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded" title={tag.tagDescription}>
+    <div
+      className="flex items-center justify-between py-2 px-3 hover:bg-purple-50 rounded cursor-pointer transition-colors"
+      title={tag.tagDescription}
+      onClick={() => onTagClick?.(tag.tag)}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+          <span className="font-mono text-sm font-medium text-purple-700 hover:text-purple-900">
+            {tag.tagFormatted || tag.tag}
+          </span>
           {tag.systemName && (
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded flex-shrink-0">
               {tag.systemName}
@@ -95,6 +102,7 @@ const TagRow = ({ tag }) => {
 
 export function TrendsSummary({ data, loading, error }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const { onTagClick } = useTagClick();
 
   if (loading) {
     return (
@@ -141,7 +149,7 @@ export function TrendsSummary({ data, loading, error }) {
     {
       key: 'worsening',
       label: 'Worsening',
-      description: 'Severity increased',
+      description: 'Severity level increased over time',
       count: summary.worseningCount,
       tags: tagTrends.worsening,
       color: 'red',
@@ -149,8 +157,8 @@ export function TrendsSummary({ data, loading, error }) {
     },
     {
       key: 'persistent',
-      label: 'Persistent',
-      description: 'Same severity across surveys',
+      label: 'Stagnant',
+      description: 'Same severity, not improving',
       count: summary.persistentCount,
       tags: tagTrends.persistent,
       color: 'yellow',
@@ -159,7 +167,7 @@ export function TrendsSummary({ data, loading, error }) {
     {
       key: 'improving',
       label: 'Improving',
-      description: 'Severity decreased',
+      description: 'Severity level decreased',
       count: summary.improvingCount,
       tags: tagTrends.improving,
       color: 'green',
@@ -168,7 +176,7 @@ export function TrendsSummary({ data, loading, error }) {
     {
       key: 'resolved',
       label: 'Resolved',
-      description: 'Not in most recent survey',
+      description: 'Not cited in most recent survey',
       count: summary.resolvedCount,
       tags: tagTrends.resolved,
       color: 'green',
@@ -186,7 +194,7 @@ export function TrendsSummary({ data, loading, error }) {
       <div className="p-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900">Deficiency Trends</h3>
         <p className="text-sm text-gray-500 mt-1">
-          Tracks how your deficiency tags change across surveys. Worsening = higher severity over time. Persistent = same severity repeated. Use this to identify stubborn issues.
+          Tracks how your deficiency tags change across surveys. Worsening = severity escalating. Stagnant = same severity, not improving. Use this to identify stubborn issues.
         </p>
         <p className="text-xs text-gray-400 mt-1">
           {summary.totalSurveys} surveys, {summary.uniqueTags} unique tags
@@ -218,12 +226,12 @@ export function TrendsSummary({ data, loading, error }) {
       {/* Trend Cards */}
       <div className="p-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {categories.map(category => (
+          {categories.map(({ key, ...categoryProps }) => (
             <TrendCard
-              key={category.key}
-              {...category}
+              key={key}
+              {...categoryProps}
               onClick={() => setSelectedCategory(
-                selectedCategory === category.key ? null : category.key
+                selectedCategory === key ? null : key
               )}
             />
           ))}
@@ -262,7 +270,7 @@ export function TrendsSummary({ data, loading, error }) {
             </h4>
             <div className="space-y-1">
               {selectedCategoryData.tags.map(tag => (
-                <TagRow key={tag.tag} tag={tag} />
+                <TagRow key={tag.tag} tag={tag} onTagClick={onTagClick} />
               ))}
             </div>
           </div>

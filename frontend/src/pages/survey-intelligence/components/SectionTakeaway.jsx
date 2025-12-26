@@ -69,7 +69,7 @@ export function RiskScoreTakeaway({ riskScore, surveyTiming }) {
       <SectionTakeaway icon="⚠️" type="danger">
         <strong>Immediate attention needed.</strong> Your risk score is {score}/100 (high)
         {monthsSince >= 10 && ` with a survey window ${monthsSince >= 12 ? 'now open' : 'opening soon'}`}.
-        Focus on your worsening and persistent tags before surveyors arrive.
+        Focus on your worsening and stagnant tags before surveyors arrive.
       </SectionTakeaway>
     );
   }
@@ -190,7 +190,7 @@ export function TrendsTakeaway({ tagTrends, summary }) {
   if (persistentCount > 2) {
     return (
       <SectionTakeaway icon="💡" type="warning">
-        <strong>{persistentCount} persistent tags</strong> indicate ongoing challenges.
+        <strong>{persistentCount} stagnant tags</strong> indicate ongoing challenges that aren't improving.
         Review your corrective action plans for these areas - surveyors notice patterns.
       </SectionTakeaway>
     );
@@ -200,7 +200,7 @@ export function TrendsTakeaway({ tagTrends, summary }) {
     return (
       <SectionTakeaway icon="💡" type="info">
         <strong>{newCount} new tag{newCount > 1 ? 's' : ''}</strong> appeared in your most recent survey.
-        Monitor these to prevent them from becoming persistent issues.
+        Monitor these to prevent them from becoming stagnant issues.
       </SectionTakeaway>
     );
   }

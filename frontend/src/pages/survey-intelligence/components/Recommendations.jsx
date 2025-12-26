@@ -19,8 +19,10 @@ import {
   AlertCircle,
   ArrowRight,
   Lightbulb,
-  Shield
+  Shield,
+  Minus
 } from 'lucide-react';
+import { useTagClick, ClickableTag } from './TagClickContext';
 
 /**
  * System name mapping for readable recommendations
@@ -124,7 +126,8 @@ function generateRecommendations(riskData, trendsData) {
       icon: TrendingUp,
       title: 'State Trend Alignment',
       description: `${factors.marketAlignment.matchingHotTags} of your cited tags are trending in your state. Surveyors are likely focusing on these areas.`,
-      action: `Review these state hot tags: ${factors.marketAlignment.hotTags?.slice(0, 3).join(', ')}`,
+      action: 'Review these state hot tags:',
+      actionTags: factors.marketAlignment.hotTags?.slice(0, 3) || [],
       priority: 'high'
     });
   }
@@ -133,56 +136,95 @@ function generateRecommendations(riskData, trendsData) {
   if (trendsData?.hasData && trendsData.tagTrends) {
     const { worsening, persistent } = trendsData.tagTrends;
 
-    // Worsening tags
+    // Worsening tags - severity is increasing
     if (worsening?.length > 0) {
-      // Group by system
-      const worseningBySystems = {};
+      // Group by actual system name (not system ID)
+      const systemGroups = {};
       worsening.forEach(tag => {
-        const system = tag.system || 0;
-        if (!worseningBySystems[system]) {
-          worseningBySystems[system] = [];
+        const groupKey = tag.systemName && tag.systemName !== 'Other' ? tag.systemName : (tag.tagCategory || 'Other');
+        if (!systemGroups[groupKey]) {
+          systemGroups[groupKey] = [];
         }
-        worseningBySystems[system].push(tag.tag);
+        systemGroups[groupKey].push(tag);
       });
 
-      Object.entries(worseningBySystems).forEach(([system, tags]) => {
-        const systemName = SYSTEM_NAMES[system] || 'General';
+      // Create one recommendation per system/category, or one combined if all "Other"
+      const groupEntries = Object.entries(systemGroups);
+      if (groupEntries.length === 1 && groupEntries[0][0] === 'Other') {
+        // All tags are uncategorized - show as single recommendation
         recommendations.critical.push({
-          id: `worsening-${system}`,
+          id: 'worsening-all',
           icon: TrendingUp,
-          title: `Worsening: ${systemName}`,
-          description: `Severity is increasing for ${tags.length} tag(s): ${tags.slice(0, 3).join(', ')}${tags.length > 3 ? '...' : ''}`,
-          action: `Conduct immediate focused audit on ${systemName}. Review recent incidents and staff competencies.`,
-          priority: 'critical'
+          title: 'Worsening Deficiencies',
+          description: `Severity is increasing for ${worsening.length} tag(s):`,
+          descriptionTags: worsening.slice(0, 4),
+          action: 'Conduct immediate focused audits. Review recent incidents and staff competencies.',
+          priority: 'critical',
+          scrollTo: 'deficiency-trends'
         });
-      });
+      } else {
+        groupEntries.forEach(([groupName, tags]) => {
+          if (groupName !== 'Other' || tags.length >= 2) {
+            recommendations.critical.push({
+              id: `worsening-${groupName.replace(/\s+/g, '-').toLowerCase()}`,
+              icon: TrendingUp,
+              title: groupName === 'Other' ? 'Worsening Deficiencies' : `Worsening: ${groupName}`,
+              description: `Severity is increasing for ${tags.length} tag(s):`,
+              descriptionTags: tags.slice(0, 3),
+              action: groupName === 'Other'
+                ? 'Conduct immediate focused audits. Review recent incidents and staff competencies.'
+                : `Conduct immediate focused audit on ${groupName}. Review recent incidents and staff competencies.`,
+              priority: 'critical',
+              scrollTo: 'deficiency-trends'
+            });
+          }
+        });
+      }
     }
 
-    // Persistent tags
-    if (persistent?.length > 0) {
-      // Group by system
-      const persistentBySystems = {};
+    // Stagnant tags - same severity across multiple surveys (not improving)
+    if (persistent?.length >= 2) {
+      // Group by actual system name
+      const systemGroups = {};
       persistent.forEach(tag => {
-        const system = tag.system || 0;
-        if (!persistentBySystems[system]) {
-          persistentBySystems[system] = [];
+        const groupKey = tag.systemName && tag.systemName !== 'Other' ? tag.systemName : (tag.tagCategory || 'Other');
+        if (!systemGroups[groupKey]) {
+          systemGroups[groupKey] = [];
         }
-        persistentBySystems[system].push(tag.tag);
+        systemGroups[groupKey].push(tag);
       });
 
-      Object.entries(persistentBySystems).forEach(([system, tags]) => {
-        if (tags.length >= 2) {
-          const systemName = SYSTEM_NAMES[system] || 'General';
-          recommendations.focus.push({
-            id: `persistent-${system}`,
-            icon: Repeat,
-            title: `Persistent: ${systemName}`,
-            description: `${tags.length} tags have been cited at the same severity across surveys: ${tags.slice(0, 3).join(', ')}`,
-            action: `Review root cause analysis for ${systemName}. Consider process redesign if current interventions aren't working.`,
-            priority: 'medium'
-          });
-        }
-      });
+      const groupEntries = Object.entries(systemGroups);
+      if (groupEntries.length === 1 && groupEntries[0][0] === 'Other') {
+        // All tags are uncategorized
+        recommendations.focus.push({
+          id: 'stagnant-all',
+          icon: Minus,
+          title: 'Stagnant Deficiencies',
+          description: `${persistent.length} tags stuck at the same severity level (not improving):`,
+          descriptionTags: persistent.slice(0, 4),
+          action: 'Review root cause analysis. Consider process redesign if current interventions aren\'t working.',
+          priority: 'medium',
+          scrollTo: 'deficiency-trends'
+        });
+      } else {
+        groupEntries.forEach(([groupName, tags]) => {
+          if (tags.length >= 2) {
+            recommendations.focus.push({
+              id: `stagnant-${groupName.replace(/\s+/g, '-').toLowerCase()}`,
+              icon: Minus,
+              title: groupName === 'Other' ? 'Stagnant Deficiencies' : `Stagnant: ${groupName}`,
+              description: `${tags.length} tags stuck at the same severity level:`,
+              descriptionTags: tags.slice(0, 3),
+              action: groupName === 'Other'
+                ? 'Review root cause analysis. Consider process redesign if current interventions aren\'t working.'
+                : `Review root cause analysis for ${groupName}. Consider process redesign if current interventions aren\'t working.`,
+              priority: 'medium',
+              scrollTo: 'deficiency-trends'
+            });
+          }
+        });
+      }
     }
   }
 
@@ -232,10 +274,22 @@ function generateRecommendations(riskData, trendsData) {
 }
 
 /**
+ * Scroll to a section by id
+ */
+const scrollToSection = (sectionId) => {
+  if (!sectionId) return;
+  const element = document.getElementById(sectionId);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
+/**
  * Recommendation card component
  */
-const RecommendationCard = ({ recommendation }) => {
+const RecommendationCard = ({ recommendation, onTagClick }) => {
   const Icon = recommendation.icon;
+  const hasScrollTarget = !!recommendation.scrollTo;
 
   const priorityColors = {
     critical: 'border-l-red-500 bg-red-50',
@@ -244,8 +298,41 @@ const RecommendationCard = ({ recommendation }) => {
     low: 'border-l-green-500 bg-green-50'
   };
 
+  const renderTags = (tags) => {
+    if (!tags || tags.length === 0) return null;
+    return (
+      <span className="inline-flex flex-wrap gap-1 ml-1">
+        {tags.map((tag, idx) => (
+          <button
+            key={tag.tag || idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTagClick?.(tag.tag);
+            }}
+            className="font-mono text-purple-700 hover:text-purple-900 hover:underline cursor-pointer"
+          >
+            {tag.tagFormatted || tag.tag}
+            {idx < tags.length - 1 && <span className="text-gray-400">,</span>}
+          </button>
+        ))}
+      </span>
+    );
+  };
+
+  const handleCardClick = () => {
+    if (hasScrollTarget) {
+      scrollToSection(recommendation.scrollTo);
+    }
+  };
+
   return (
-    <div className={`border-l-4 rounded-r-lg p-4 ${priorityColors[recommendation.priority]}`}>
+    <div
+      className={`border-l-4 rounded-r-lg p-4 ${priorityColors[recommendation.priority]} ${hasScrollTarget ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={handleCardClick}
+      role={hasScrollTarget ? 'button' : undefined}
+      tabIndex={hasScrollTarget ? 0 : undefined}
+      onKeyDown={hasScrollTarget ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleCardClick(); } : undefined}
+    >
       <div className="flex items-start gap-3">
         <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
           recommendation.priority === 'critical' ? 'text-red-600' :
@@ -253,11 +340,22 @@ const RecommendationCard = ({ recommendation }) => {
           recommendation.priority === 'medium' ? 'text-yellow-600' : 'text-green-600'
         }`} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-gray-900">{recommendation.title}</h4>
-          <p className="text-sm text-gray-600 mt-1">{recommendation.description}</p>
-          <div className="flex items-center gap-2 mt-2 text-sm">
-            <ArrowRight className="h-4 w-4 text-purple-600" />
-            <span className="text-purple-700 font-medium">{recommendation.action}</span>
+          <div className="flex items-center gap-2">
+            <h4 className="font-medium text-gray-900">{recommendation.title}</h4>
+            {hasScrollTarget && (
+              <span className="text-xs text-gray-400">Click to view →</span>
+            )}
+          </div>
+          <p className="text-sm text-gray-600 mt-1">
+            {recommendation.description}
+            {renderTags(recommendation.descriptionTags)}
+          </p>
+          <div className="flex items-center flex-wrap gap-2 mt-2 text-sm">
+            <ArrowRight className="h-4 w-4 text-purple-600 flex-shrink-0" />
+            <span className="text-purple-700 font-medium">
+              {recommendation.action}
+              {renderTags(recommendation.actionTags)}
+            </span>
           </div>
         </div>
       </div>
@@ -277,6 +375,8 @@ const SectionHeader = ({ icon: Icon, title, count, color }) => (
 );
 
 export function Recommendations({ riskData, trendsData, loading, error }) {
+  const { onTagClick } = useTagClick();
+
   const recommendations = useMemo(() => {
     return generateRecommendations(riskData, trendsData);
   }, [riskData, trendsData]);
@@ -352,7 +452,7 @@ export function Recommendations({ riskData, trendsData, loading, error }) {
             />
             <div className="space-y-3">
               {recommendations.critical.map(rec => (
-                <RecommendationCard key={rec.id} recommendation={rec} />
+                <RecommendationCard key={rec.id} recommendation={rec} onTagClick={onTagClick} />
               ))}
             </div>
           </div>
@@ -369,7 +469,7 @@ export function Recommendations({ riskData, trendsData, loading, error }) {
             />
             <div className="space-y-3">
               {recommendations.focus.map(rec => (
-                <RecommendationCard key={rec.id} recommendation={rec} />
+                <RecommendationCard key={rec.id} recommendation={rec} onTagClick={onTagClick} />
               ))}
             </div>
           </div>
@@ -386,7 +486,7 @@ export function Recommendations({ riskData, trendsData, loading, error }) {
             />
             <div className="space-y-3">
               {recommendations.watch.map(rec => (
-                <RecommendationCard key={rec.id} recommendation={rec} />
+                <RecommendationCard key={rec.id} recommendation={rec} onTagClick={onTagClick} />
               ))}
             </div>
           </div>

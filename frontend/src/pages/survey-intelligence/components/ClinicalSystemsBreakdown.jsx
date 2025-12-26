@@ -19,6 +19,7 @@ import {
   Minus
 } from 'lucide-react';
 import { ClinicalSystemsTakeaway } from './SectionTakeaway';
+import { useTagClick } from './TagClickContext';
 
 /**
  * Risk badge component
@@ -101,7 +102,7 @@ const ScoreDisplay = ({ score, threshold }) => {
 /**
  * F-tag pills
  */
-const FTagPills = ({ tags }) => {
+const FTagPills = ({ tags, onTagClick }) => {
   if (!tags || tags.length === 0) {
     return <span className="text-gray-400 text-sm">No citations</span>;
   }
@@ -109,14 +110,18 @@ const FTagPills = ({ tags }) => {
   return (
     <div className="flex flex-wrap gap-1">
       {tags.slice(0, 3).map((tagData) => (
-        <span
+        <button
           key={tagData.tag}
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTagClick?.(tagData.tag);
+          }}
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-purple-700 hover:bg-purple-100 hover:text-purple-900 transition-colors cursor-pointer"
           title={tagData.tagDescription || tagData.tagName}
         >
           {tagData.tagFormatted || tagData.tag}
           {tagData.count > 1 && <span className="ml-1 text-gray-500">×{tagData.count}</span>}
-        </span>
+        </button>
       ))}
       {tags.length > 3 && (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500">
@@ -130,7 +135,7 @@ const FTagPills = ({ tags }) => {
 /**
  * System row component
  */
-const SystemRow = ({ system, threshold, onViewClick }) => {
+const SystemRow = ({ system, threshold, onViewClick, onTagClick }) => {
   const hasIssue = system.cmsRisk !== 'low' && system.gap !== null && system.gap < 0;
 
   return (
@@ -155,7 +160,7 @@ const SystemRow = ({ system, threshold, onViewClick }) => {
         <GapIndicator gap={system.gap} gapStatus={system.gapStatus} />
       </td>
       <td className="px-4 py-3">
-        <FTagPills tags={system.fTags} />
+        <FTagPills tags={system.fTags} onTagClick={onTagClick} />
       </td>
       <td className="px-4 py-3 text-right">
         <button
@@ -204,6 +209,8 @@ const AttentionAlert = ({ systems }) => {
 };
 
 export function ClinicalSystemsBreakdown({ data, loading, error, onViewSystem }) {
+  const { onTagClick } = useTagClick();
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -313,6 +320,7 @@ export function ClinicalSystemsBreakdown({ data, loading, error, onViewSystem })
                 system={system}
                 threshold={threshold}
                 onViewClick={onViewSystem}
+                onTagClick={onTagClick}
               />
             ))}
           </tbody>

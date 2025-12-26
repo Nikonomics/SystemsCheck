@@ -1689,14 +1689,19 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
     `, [facility.ccn]);
     const facilityState = facilityInfoResult.rows[0]?.state || facility.state;
 
-    // Get facility's tag history (3 years)
+    // Get facility's tag history with counts (3 years)
     const facilityTagsResult = await pool.query(`
-      SELECT DISTINCT deficiency_tag
+      SELECT deficiency_tag, COUNT(*) as count
       FROM cms_facility_deficiencies
       WHERE federal_provider_number = $1
         AND survey_date >= NOW() - INTERVAL '3 years'
+      GROUP BY deficiency_tag
     `, [facility.ccn]);
     const facilityTags = new Set(facilityTagsResult.rows.map(r => r.deficiency_tag));
+    const facilityTagCounts = {};
+    facilityTagsResult.rows.forEach(r => {
+      facilityTagCounts[r.deficiency_tag] = parseInt(r.count);
+    });
 
     // Get state trends - compare last 6 months vs prior 6 months
     const stateTrendsResult = await pool.query(`
@@ -1754,6 +1759,20 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
 
     stateTrendsResult.rows.forEach(row => {
       const def = getTagDefinition(row.tag);
+      const recentCount = parseInt(row.recent_count) || 0;
+      const priorCount = parseInt(row.prior_count) || 0;
+      const recentFacilities = parseInt(row.recent_facilities) || 0;
+      const totalFacilities = parseInt(row.total_facilities) || 1;
+      const yoyChange = parseFloat(row.yoy_change) || 0;
+
+      // Calculate trend direction
+      let trend = 'stable';
+      if (yoyChange > 10) trend = 'up';
+      else if (yoyChange < -10) trend = 'down';
+
+      // Count facility's citations for this tag
+      const yourCitations = facilityTagCounts[row.tag] || 0;
+
       const tagData = {
         tag: row.tag,
         tagFormatted: def.tag,
@@ -1762,17 +1781,27 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
         tagCategory: def.category,
         system: TAG_TO_SYSTEM[row.tag] || null,
         systemName: TAG_TO_SYSTEM[row.tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[row.tag]] : 'Other',
-        recentCount: parseInt(row.recent_count),
-        priorCount: parseInt(row.prior_count),
-        yoyChange: parseFloat(row.yoy_change) || 0,
-        recentFacilities: parseInt(row.recent_facilities),
-        totalFacilities: parseInt(row.total_facilities),
-        percentOfFacilities: Math.round((parseInt(row.recent_facilities) / parseInt(row.total_facilities)) * 100)
+        // Enhanced metrics
+        citations: recentCount,
+        facilitiesCited: recentFacilities,
+        totalFacilitiesInPeriod: totalFacilities,
+        percentFacilities: Math.round((recentFacilities / totalFacilities) * 100),
+        avgCitationsPerFacility: recentFacilities > 0 ? Math.round((recentCount / recentFacilities) * 10) / 10 : 0,
+        yourCitations,
+        trend,
+        trendPercent: Math.abs(Math.round(yoyChange)),
+        // Legacy fields for compatibility
+        recentCount,
+        priorCount,
+        yoyChange,
+        recentFacilities,
+        totalFacilities,
+        percentOfFacilities: Math.round((recentFacilities / totalFacilities) * 100)
       };
 
       if (facilityTags.has(row.tag)) {
         yourTrendingTags.push(tagData);
-      } else if (tagData.yoyChange > 20 || tagData.recentCount >= 10) {
+      } else if (yoyChange > 20 || recentCount >= 10) {
         // Emerging risk: significant YoY increase or high volume, not in your history
         emergingRisks.push(tagData);
       }
@@ -1784,14 +1813,14 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
 
     // Calculate date period
     const now = new Date();
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const eighteenMonthsAgo = new Date();
+    eighteenMonthsAgo.setMonth(eighteenMonthsAgo.getMonth() - 6);
 
     const dataPeriod = {
-      startDate: sixMonthsAgo.toISOString().split('T')[0],
+      startDate: eighteenMonthsAgo.toISOString().split('T')[0],
       endDate: now.toISOString().split('T')[0],
       months: 6,
-      label: `${sixMonthsAgo.toLocaleDateString('en-US', { month: 'short' })} - ${now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+      label: `${eighteenMonthsAgo.toLocaleDateString('en-US', { month: 'short' })} - ${now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
     };
 
     // Get state-level summary stats
@@ -1873,6 +1902,569 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
 
   } catch (error) {
     console.error('[Survey Intel] Error getting market context:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/survey-intel/tag/:tag/details
+ *
+ * Get detailed information about a specific deficiency tag
+ * Includes facility history, geographic trends (CBSA, State, Region, National)
+ */
+router.get('/tag/:tag/details', authenticateToken, async (req, res) => {
+  try {
+    const { tag } = req.params;
+    const { facilityId, state } = req.query;
+
+    const pool = getMarketPool();
+    if (!pool) {
+      return res.status(503).json({ success: false, error: 'Market database not available' });
+    }
+
+    // Get tag definition
+    const tagDef = getTagDefinition(tag);
+    const normalizedTag = tag.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+    // Get facility info if provided
+    let facility = null;
+    let facilityState = state;
+    let facilityCBSA = null;
+
+    if (facilityId) {
+      facility = await getFacilityWithCCN(facilityId);
+      if (facility?.ccn) {
+        const facilityInfoResult = await pool.query(`
+          SELECT state, cbsa_code, cbsa_title, city
+          FROM snf_facilities
+          WHERE federal_provider_number = $1
+          LIMIT 1
+        `, [facility.ccn]);
+
+        if (facilityInfoResult.rows[0]) {
+          facilityState = facilityInfoResult.rows[0].state;
+          facilityCBSA = {
+            code: facilityInfoResult.rows[0].cbsa_code,
+            title: facilityInfoResult.rows[0].cbsa_title
+          };
+          facility.city = facilityInfoResult.rows[0].city;
+        }
+      }
+    }
+
+    // Normalize tag for DB query - need to handle F880 vs F-880 vs 0880
+    let dbTag = normalizedTag;
+    if (!normalizedTag.match(/^[FKLE]/)) {
+      dbTag = 'F' + normalizedTag.padStart(4, '0');
+    }
+
+    // Get facility history for this tag
+    let facilityHistory = [];
+    if (facility?.ccn) {
+      const facilityHistoryResult = await pool.query(`
+        SELECT
+          survey_date,
+          survey_type,
+          scope_severity,
+          deficiency_text
+        FROM cms_facility_deficiencies
+        WHERE federal_provider_number = $1
+          AND deficiency_tag = $2
+        ORDER BY survey_date DESC
+        LIMIT 10
+      `, [facility.ccn, dbTag]);
+
+      facilityHistory = facilityHistoryResult.rows.map(row => ({
+        date: row.survey_date,
+        surveyType: row.survey_type,
+        severity: getSeverityLevel(row.scope_severity),
+        severityCode: row.scope_severity,
+        excerpt: row.deficiency_text?.substring(0, 300) || null
+      }));
+    }
+
+    // Calculate time periods for trends
+    // CMS data typically lags 3-6 months, so use 18 months for recent and 36 months for prior
+    const now = new Date();
+    const eighteenMonthsAgo = new Date();
+    eighteenMonthsAgo.setMonth(eighteenMonthsAgo.getMonth() - 18);
+    const thirtySixMonthsAgo = new Date();
+    thirtySixMonthsAgo.setMonth(thirtySixMonthsAgo.getMonth() - 36);
+
+    // Get geographic trends - CBSA (if available)
+    let cbsaTrend = null;
+    if (facilityCBSA?.code) {
+      const cbsaResult = await pool.query(`
+        WITH recent AS (
+          SELECT COUNT(*) as count, COUNT(DISTINCT d.federal_provider_number) as facilities
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.cbsa_code = $1 AND d.deficiency_tag = $2
+            AND d.survey_date >= $3
+        ),
+        prior AS (
+          SELECT COUNT(*) as count
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.cbsa_code = $1 AND d.deficiency_tag = $2
+            AND d.survey_date >= $4 AND d.survey_date < $3
+        ),
+        total AS (
+          SELECT COUNT(*) as total FROM snf_facilities WHERE cbsa_code = $1
+        )
+        SELECT
+          r.count as recent_count, r.facilities as recent_facilities,
+          p.count as prior_count, t.total as total_facilities
+        FROM recent r, prior p, total t
+      `, [facilityCBSA.code, dbTag, eighteenMonthsAgo, thirtySixMonthsAgo]);
+
+      if (cbsaResult.rows[0]) {
+        const r = cbsaResult.rows[0];
+        const recentCount = parseInt(r.recent_count) || 0;
+        const priorCount = parseInt(r.prior_count) || 0;
+        const yoyChange = priorCount > 0 ? Math.round(((recentCount - priorCount) / priorCount) * 100) : (recentCount > 0 ? 100 : 0);
+
+        cbsaTrend = {
+          name: facilityCBSA.title || `CBSA ${facilityCBSA.code}`,
+          code: facilityCBSA.code,
+          citations: recentCount,
+          facilitiesCited: parseInt(r.recent_facilities) || 0,
+          totalFacilities: parseInt(r.total_facilities) || 0,
+          percentFacilities: parseInt(r.total_facilities) > 0 ? Math.round((parseInt(r.recent_facilities) / parseInt(r.total_facilities)) * 100) : 0,
+          yoyChange,
+          trend: yoyChange > 10 ? 'up' : yoyChange < -10 ? 'down' : 'stable'
+        };
+      }
+    }
+
+    // Get State trends
+    let stateTrend = null;
+    if (facilityState) {
+      const stateResult = await pool.query(`
+        WITH recent AS (
+          SELECT COUNT(*) as count, COUNT(DISTINCT d.federal_provider_number) as facilities
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.state = $1 AND d.deficiency_tag = $2
+            AND d.survey_date >= $3
+        ),
+        prior AS (
+          SELECT COUNT(*) as count
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.state = $1 AND d.deficiency_tag = $2
+            AND d.survey_date >= $4 AND d.survey_date < $3
+        ),
+        total AS (
+          SELECT COUNT(*) as total FROM snf_facilities WHERE state = $1
+        )
+        SELECT
+          r.count as recent_count, r.facilities as recent_facilities,
+          p.count as prior_count, t.total as total_facilities
+        FROM recent r, prior p, total t
+      `, [facilityState, dbTag, eighteenMonthsAgo, thirtySixMonthsAgo]);
+
+      if (stateResult.rows[0]) {
+        const r = stateResult.rows[0];
+        const recentCount = parseInt(r.recent_count) || 0;
+        const priorCount = parseInt(r.prior_count) || 0;
+        const yoyChange = priorCount > 0 ? Math.round(((recentCount - priorCount) / priorCount) * 100) : (recentCount > 0 ? 100 : 0);
+
+        stateTrend = {
+          name: facilityState,
+          citations: recentCount,
+          facilitiesCited: parseInt(r.recent_facilities) || 0,
+          totalFacilities: parseInt(r.total_facilities) || 0,
+          percentFacilities: parseInt(r.total_facilities) > 0 ? Math.round((parseInt(r.recent_facilities) / parseInt(r.total_facilities)) * 100) : 0,
+          yoyChange,
+          trend: yoyChange > 10 ? 'up' : yoyChange < -10 ? 'down' : 'stable'
+        };
+      }
+    }
+
+    // Get Regional trends (CMS region based on state)
+    const CMS_REGIONS = {
+      'CT': 1, 'ME': 1, 'MA': 1, 'NH': 1, 'RI': 1, 'VT': 1,
+      'NJ': 2, 'NY': 2, 'PR': 2, 'VI': 2,
+      'DE': 3, 'DC': 3, 'MD': 3, 'PA': 3, 'VA': 3, 'WV': 3,
+      'AL': 4, 'FL': 4, 'GA': 4, 'KY': 4, 'MS': 4, 'NC': 4, 'SC': 4, 'TN': 4,
+      'IL': 5, 'IN': 5, 'MI': 5, 'MN': 5, 'OH': 5, 'WI': 5,
+      'AR': 6, 'LA': 6, 'NM': 6, 'OK': 6, 'TX': 6,
+      'IA': 7, 'KS': 7, 'MO': 7, 'NE': 7,
+      'CO': 8, 'MT': 8, 'ND': 8, 'SD': 8, 'UT': 8, 'WY': 8,
+      'AZ': 9, 'CA': 9, 'HI': 9, 'NV': 9, 'GU': 9, 'AS': 9,
+      'AK': 10, 'ID': 10, 'OR': 10, 'WA': 10
+    };
+
+    let regionTrend = null;
+    const regionNum = CMS_REGIONS[facilityState];
+    if (regionNum) {
+      const regionStates = Object.entries(CMS_REGIONS)
+        .filter(([_, r]) => r === regionNum)
+        .map(([s, _]) => s);
+
+      const regionResult = await pool.query(`
+        WITH recent AS (
+          SELECT COUNT(*) as count, COUNT(DISTINCT d.federal_provider_number) as facilities
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.state = ANY($1) AND d.deficiency_tag = $2
+            AND d.survey_date >= $3
+        ),
+        prior AS (
+          SELECT COUNT(*) as count
+          FROM cms_facility_deficiencies d
+          JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+          WHERE f.state = ANY($1) AND d.deficiency_tag = $2
+            AND d.survey_date >= $4 AND d.survey_date < $3
+        ),
+        total AS (
+          SELECT COUNT(*) as total FROM snf_facilities WHERE state = ANY($1)
+        )
+        SELECT
+          r.count as recent_count, r.facilities as recent_facilities,
+          p.count as prior_count, t.total as total_facilities
+        FROM recent r, prior p, total t
+      `, [regionStates, dbTag, eighteenMonthsAgo, thirtySixMonthsAgo]);
+
+      if (regionResult.rows[0]) {
+        const r = regionResult.rows[0];
+        const recentCount = parseInt(r.recent_count) || 0;
+        const priorCount = parseInt(r.prior_count) || 0;
+        const yoyChange = priorCount > 0 ? Math.round(((recentCount - priorCount) / priorCount) * 100) : (recentCount > 0 ? 100 : 0);
+
+        regionTrend = {
+          name: `CMS Region ${regionNum}`,
+          regionNumber: regionNum,
+          states: regionStates,
+          citations: recentCount,
+          facilitiesCited: parseInt(r.recent_facilities) || 0,
+          totalFacilities: parseInt(r.total_facilities) || 0,
+          percentFacilities: parseInt(r.total_facilities) > 0 ? Math.round((parseInt(r.recent_facilities) / parseInt(r.total_facilities)) * 100) : 0,
+          yoyChange,
+          trend: yoyChange > 10 ? 'up' : yoyChange < -10 ? 'down' : 'stable'
+        };
+      }
+    }
+
+    // Get National trends
+    const nationalResult = await pool.query(`
+      WITH recent AS (
+        SELECT COUNT(*) as count, COUNT(DISTINCT federal_provider_number) as facilities
+        FROM cms_facility_deficiencies
+        WHERE deficiency_tag = $1
+          AND survey_date >= $2
+      ),
+      prior AS (
+        SELECT COUNT(*) as count
+        FROM cms_facility_deficiencies
+        WHERE deficiency_tag = $1
+          AND survey_date >= $3 AND survey_date < $2
+      ),
+      total AS (
+        SELECT COUNT(*) as total FROM snf_facilities
+      )
+      SELECT
+        r.count as recent_count, r.facilities as recent_facilities,
+        p.count as prior_count, t.total as total_facilities
+      FROM recent r, prior p, total t
+    `, [dbTag, eighteenMonthsAgo, thirtySixMonthsAgo]);
+
+    let nationalTrend = null;
+    if (nationalResult.rows[0]) {
+      const r = nationalResult.rows[0];
+      const recentCount = parseInt(r.recent_count) || 0;
+      const priorCount = parseInt(r.prior_count) || 0;
+      const yoyChange = priorCount > 0 ? Math.round(((recentCount - priorCount) / priorCount) * 100) : (recentCount > 0 ? 100 : 0);
+
+      nationalTrend = {
+        name: 'National',
+        citations: recentCount,
+        facilitiesCited: parseInt(r.recent_facilities) || 0,
+        totalFacilities: parseInt(r.total_facilities) || 0,
+        percentFacilities: parseInt(r.total_facilities) > 0 ? Math.round((parseInt(r.recent_facilities) / parseInt(r.total_facilities)) * 100) : 0,
+        yoyChange,
+        trend: yoyChange > 10 ? 'up' : yoyChange < -10 ? 'down' : 'stable'
+      };
+    }
+
+    // Get top co-occurring tags
+    const coOccurringResult = await pool.query(`
+      SELECT
+        d2.deficiency_tag,
+        COUNT(*) as co_occurrence_count
+      FROM cms_facility_deficiencies d1
+      JOIN cms_facility_deficiencies d2 ON
+        d1.federal_provider_number = d2.federal_provider_number
+        AND d1.survey_date = d2.survey_date
+        AND d1.deficiency_tag != d2.deficiency_tag
+      WHERE d1.deficiency_tag = $1
+        AND d1.survey_date >= $2
+      GROUP BY d2.deficiency_tag
+      ORDER BY co_occurrence_count DESC
+      LIMIT 5
+    `, [dbTag, thirtySixMonthsAgo]);
+
+    const coOccurringTags = coOccurringResult.rows.map(row => {
+      const def = getTagDefinition(row.deficiency_tag);
+      return {
+        tag: row.deficiency_tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        count: parseInt(row.co_occurrence_count),
+        system: TAG_TO_SYSTEM[row.deficiency_tag] || null,
+        systemName: TAG_TO_SYSTEM[row.deficiency_tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[row.deficiency_tag]] : 'Other'
+      };
+    });
+
+    res.json({
+      success: true,
+      tag: {
+        raw: tag,
+        normalized: dbTag,
+        formatted: tagDef.tag,
+        name: tagDef.name,
+        description: tagDef.description,
+        category: tagDef.category,
+        prefix: tagDef.prefix,
+        system: TAG_TO_SYSTEM[dbTag] || null,
+        systemName: TAG_TO_SYSTEM[dbTag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[dbTag]] : 'Other'
+      },
+      facility: facility ? {
+        id: facility.id,
+        name: facility.name,
+        ccn: facility.ccn,
+        state: facilityState,
+        city: facility.city,
+        cbsa: facilityCBSA
+      } : null,
+      facilityHistory,
+      geographicTrends: {
+        cbsa: cbsaTrend,
+        state: stateTrend,
+        region: regionTrend,
+        national: nationalTrend
+      },
+      coOccurringTags,
+      dataPeriod: {
+        recent: {
+          startDate: eighteenMonthsAgo.toISOString().split('T')[0],
+          endDate: now.toISOString().split('T')[0],
+          months: 18
+        },
+        comparison: {
+          startDate: thirtySixMonthsAgo.toISOString().split('T')[0],
+          endDate: eighteenMonthsAgo.toISOString().split('T')[0],
+          months: 18
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('[Survey Intel] Error getting tag details:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/survey-intel/facility/:facilityId/recommendations
+ *
+ * Get AI-powered recommendations based on survey analysis
+ * Combines risk factors, trends, and market context into actionable items
+ */
+router.get('/facility/:facilityId/recommendations', authenticateToken, async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+
+    const facility = await getFacilityWithCCN(facilityId);
+    if (!facility) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+
+    if (!facility.ccn) {
+      return res.json({
+        success: true,
+        hasData: false,
+        message: 'Facility not linked to CMS data (no CCN)'
+      });
+    }
+
+    const pool = getMarketPool();
+    if (!pool) {
+      return res.status(503).json({ success: false, error: 'Market database not available' });
+    }
+
+    // Get facility's state from snf_facilities
+    const facilityInfoResult = await pool.query(`
+      SELECT state FROM snf_facilities WHERE federal_provider_number = $1 LIMIT 1
+    `, [facility.ccn]);
+    const facilityState = facilityInfoResult.rows[0]?.state || facility.state;
+
+    const recommendations = [];
+
+    // Get facility deficiencies
+    const deficienciesResult = await pool.query(`
+      SELECT
+        survey_date,
+        deficiency_tag,
+        scope_severity
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
+        AND survey_date >= NOW() - INTERVAL '3 years'
+      ORDER BY survey_date DESC
+    `, [facility.ccn]);
+
+    // Check for repeat tags
+    const tagCounts = {};
+    deficienciesResult.rows.forEach(d => {
+      tagCounts[d.deficiency_tag] = (tagCounts[d.deficiency_tag] || 0) + 1;
+    });
+
+    const repeatTags = Object.entries(tagCounts)
+      .filter(([_, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (repeatTags.length > 0) {
+      const topRepeat = repeatTags[0];
+      const def = getTagDefinition(topRepeat[0]);
+      recommendations.push({
+        priority: 'high',
+        category: 'repeat_prevention',
+        title: `Address Repeat Citation: ${def.tag}`,
+        description: `${def.tag} (${def.name}) has been cited ${topRepeat[1]} times in the past 3 years. Implement targeted improvements to prevent future citations.`,
+        tag: topRepeat[0],
+        tagFormatted: def.tag,
+        tagName: def.name,
+        system: TAG_TO_SYSTEM[topRepeat[0]] || null,
+        systemName: TAG_TO_SYSTEM[topRepeat[0]] ? SYSTEM_NAMES[TAG_TO_SYSTEM[topRepeat[0]]] : 'Other',
+        actionItems: [
+          'Review root cause analysis for previous citations',
+          'Implement corrective action plan',
+          'Schedule targeted staff training',
+          'Establish monitoring protocol'
+        ]
+      });
+    }
+
+    // Check for high severity citations
+    const highSeverityTags = deficienciesResult.rows.filter(d => {
+      const severity = getSeverityLevel(d.scope_severity);
+      return ['E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].includes(severity);
+    });
+
+    if (highSeverityTags.length > 0) {
+      const worstTag = highSeverityTags.sort((a, b) => {
+        return (SEVERITY_SCORES[getSeverityLevel(b.scope_severity)] || 0) - (SEVERITY_SCORES[getSeverityLevel(a.scope_severity)] || 0);
+      })[0];
+      const def = getTagDefinition(worstTag.deficiency_tag);
+
+      recommendations.push({
+        priority: 'high',
+        category: 'severity_reduction',
+        title: `Critical: Address High-Severity Citation`,
+        description: `${def.tag} was cited at severity level ${getSeverityLevel(worstTag.scope_severity)}. Focus on immediate harm prevention and resident safety.`,
+        tag: worstTag.deficiency_tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        system: TAG_TO_SYSTEM[worstTag.deficiency_tag] || null,
+        systemName: TAG_TO_SYSTEM[worstTag.deficiency_tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[worstTag.deficiency_tag]] : 'Other',
+        actionItems: [
+          'Conduct immediate risk assessment',
+          'Implement harm prevention protocols',
+          'Review and update policies and procedures',
+          'Document corrective actions thoroughly'
+        ]
+      });
+    }
+
+    // Check for state trending tags not in facility history
+    const stateTrendingResult = await pool.query(`
+      WITH recent AS (
+        SELECT deficiency_tag, COUNT(*) as count
+        FROM cms_facility_deficiencies d
+        JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+        WHERE f.state = $1
+          AND d.survey_date >= NOW() - INTERVAL '6 months'
+        GROUP BY deficiency_tag
+        HAVING COUNT(*) >= 10
+        ORDER BY count DESC
+        LIMIT 5
+      )
+      SELECT * FROM recent
+    `, [facilityState]);
+
+    const facilityTagSet = new Set(Object.keys(tagCounts));
+    const emergingRisks = stateTrendingResult.rows.filter(r => !facilityTagSet.has(r.deficiency_tag));
+
+    if (emergingRisks.length > 0) {
+      const topRisk = emergingRisks[0];
+      const def = getTagDefinition(topRisk.deficiency_tag);
+
+      recommendations.push({
+        priority: 'moderate',
+        category: 'emerging_risk',
+        title: `Prepare for Emerging Risk: ${def.tag}`,
+        description: `${def.tag} (${def.name}) is trending in ${facilityState} with ${topRisk.count} citations in the last 6 months. Proactively review your compliance.`,
+        tag: topRisk.deficiency_tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        system: TAG_TO_SYSTEM[topRisk.deficiency_tag] || null,
+        systemName: TAG_TO_SYSTEM[topRisk.deficiency_tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[topRisk.deficiency_tag]] : 'Other',
+        actionItems: [
+          'Review current policies related to this tag',
+          'Conduct self-assessment audit',
+          'Train staff on compliance requirements',
+          'Document current practices'
+        ]
+      });
+    }
+
+    // Add survey timing recommendation if needed
+    const lastSurveyResult = await pool.query(`
+      SELECT MAX(survey_date) as last_date
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
+    `, [facility.ccn]);
+
+    const lastSurveyDate = lastSurveyResult.rows[0]?.last_date;
+    const monthsSinceSurvey = monthsSince(lastSurveyDate);
+
+    if (monthsSinceSurvey >= 10) {
+      recommendations.push({
+        priority: monthsSinceSurvey >= 12 ? 'high' : 'moderate',
+        category: 'survey_readiness',
+        title: 'Prepare for Upcoming Survey',
+        description: `It has been ${monthsSinceSurvey} months since your last survey. ${monthsSinceSurvey >= 12 ? 'You are overdue and could be surveyed any time.' : 'A survey is likely in the next 2-3 months.'}`,
+        tag: null,
+        system: null,
+        actionItems: [
+          'Conduct mock survey rounds',
+          'Review and update all POCs',
+          'Ensure documentation is current',
+          'Brief staff on survey expectations'
+        ]
+      });
+    }
+
+    res.json({
+      success: true,
+      hasData: recommendations.length > 0,
+      facility: {
+        id: facility.id,
+        name: facility.name,
+        ccn: facility.ccn,
+        state: facilityState
+      },
+      recommendations: recommendations.slice(0, 5),
+      summary: {
+        totalRecommendations: recommendations.length,
+        highPriority: recommendations.filter(r => r.priority === 'high').length,
+        moderatePriority: recommendations.filter(r => r.priority === 'moderate').length
+      }
+    });
+
+  } catch (error) {
+    console.error('[Survey Intel] Error getting recommendations:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

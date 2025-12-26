@@ -20,6 +20,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { MarketContextTakeaway } from './SectionTakeaway';
+import { useTagClick } from './TagClickContext';
 
 /**
  * YoY change badge
@@ -90,17 +91,23 @@ const StateStatsHeader = ({ stats }) => {
 };
 
 /**
- * Horizontal bar for tag visualization
+ * Horizontal bar for tag visualization (used for "Your Trending Tags")
  */
-const TagBar = ({ tag, maxCount }) => {
+const TagBar = ({ tag, maxCount, onClick }) => {
   const percentage = maxCount > 0 ? (tag.recentCount / maxCount) * 100 : 0;
 
   return (
-    <div className="py-3" title={tag.tagDescription}>
+    <div
+      className="py-3 cursor-pointer hover:bg-purple-50 -mx-2 px-2 rounded-lg transition-colors"
+      title={tag.tagDescription}
+      onClick={() => onClick?.(tag.tag)}
+    >
       <div className="flex items-start justify-between mb-1">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+            <span className="font-mono text-sm font-medium text-purple-700 hover:text-purple-900">
+              {tag.tagFormatted || tag.tag}
+            </span>
             {tag.systemName && tag.systemName !== 'Other' && (
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                 {tag.systemName}
@@ -132,9 +139,74 @@ const TagBar = ({ tag, maxCount }) => {
 };
 
 /**
+ * Enhanced Emerging Risk Card with detailed metrics
+ */
+const EmergingRiskCard = ({ tag, onClick }) => {
+  const TrendIcon = tag.trend === 'up' ? TrendingUp : tag.trend === 'down' ? TrendingDown : Minus;
+  const trendColor = tag.trend === 'up' ? 'text-red-600' : tag.trend === 'down' ? 'text-green-600' : 'text-gray-500';
+  const trendBg = tag.trend === 'up' ? 'bg-red-50' : tag.trend === 'down' ? 'bg-green-50' : 'bg-gray-50';
+
+  return (
+    <div
+      className="py-3 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-purple-50 -mx-2 px-2 rounded-lg transition-colors"
+      title={tag.tagDescription}
+      onClick={() => onClick?.(tag.tag)}
+    >
+      {/* Tag header */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-sm font-semibold text-purple-700 hover:text-purple-900">
+              {tag.tagFormatted || tag.tag}
+            </span>
+            {tag.tagName && tag.tagName !== 'Unknown Tag' && (
+              <span className="text-sm text-gray-700">- {tag.tagName}</span>
+            )}
+          </div>
+          {tag.systemName && tag.systemName !== 'Other' && (
+            <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded mt-1 inline-block">
+              {tag.systemName}
+            </span>
+          )}
+        </div>
+        <AlertCircle className="h-4 w-4 text-purple-500 flex-shrink-0" />
+      </div>
+
+      {/* Facility stats */}
+      <div className="text-sm text-gray-600 mb-2">
+        <span className="font-medium text-gray-900">{tag.facilitiesCited || tag.recentFacilities}</span> of{' '}
+        <span>{tag.totalFacilitiesInPeriod || tag.totalFacilities}</span> facilities{' '}
+        <span className="text-gray-500">({tag.percentFacilities || tag.percentOfFacilities}%)</span> cited in last 6 months
+      </div>
+
+      {/* Detail metrics row */}
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-4">
+          <span className="text-gray-600">
+            Avg <span className="font-medium text-gray-900">{tag.avgCitationsPerFacility || '1.0'}</span> per facility
+          </span>
+          <span className="text-gray-400">|</span>
+          <span className="text-gray-600">
+            You: <span className={`font-medium ${tag.yourCitations > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+              {tag.yourCitations || 0} citations
+            </span>
+          </span>
+        </div>
+
+        {/* Trend badge */}
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${trendBg} ${trendColor}`}>
+          <TrendIcon className="h-3 w-3" />
+          {tag.trendPercent || Math.abs(tag.yoyChange)}% vs prior 6 mo
+        </span>
+      </div>
+    </div>
+  );
+};
+
+/**
  * Tag section (either "Your Trending" or "Emerging Risks")
  */
-const TagSection = ({ title, subtitle, icon: Icon, iconColor, tags, emptyMessage }) => {
+const TagSection = ({ title, subtitle, icon: Icon, iconColor, tags, emptyMessage, useEnhancedCard = false, onTagClick }) => {
   if (!tags || tags.length === 0) {
     return (
       <div className="border border-gray-200 rounded-lg p-4">
@@ -161,9 +233,13 @@ const TagSection = ({ title, subtitle, icon: Icon, iconColor, tags, emptyMessage
         </div>
         <span className="text-sm text-gray-500">{tags.length} tag{tags.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="divide-y divide-gray-100">
+      <div className={useEnhancedCard ? "" : "divide-y divide-gray-100"}>
         {tags.map(tag => (
-          <TagBar key={tag.tag} tag={tag} maxCount={maxCount} />
+          useEnhancedCard ? (
+            <EmergingRiskCard key={tag.tag} tag={tag} onClick={onTagClick} />
+          ) : (
+            <TagBar key={tag.tag} tag={tag} maxCount={maxCount} onClick={onTagClick} />
+          )
         ))}
       </div>
     </div>
@@ -171,6 +247,8 @@ const TagSection = ({ title, subtitle, icon: Icon, iconColor, tags, emptyMessage
 };
 
 export function MarketContext({ data, loading, error }) {
+  const { onTagClick } = useTagClick();
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -250,6 +328,7 @@ export function MarketContext({ data, loading, error }) {
             iconColor="text-orange-500"
             tags={yourTrendingTags}
             emptyMessage="None of your historical tags are currently trending in the state"
+            onTagClick={onTagClick}
           />
 
           {/* Emerging Risks */}
@@ -260,6 +339,8 @@ export function MarketContext({ data, loading, error }) {
             iconColor="text-purple-500"
             tags={emergingRisks}
             emptyMessage="No significant emerging risks identified outside your history"
+            useEnhancedCard={true}
+            onTagClick={onTagClick}
           />
         </div>
 

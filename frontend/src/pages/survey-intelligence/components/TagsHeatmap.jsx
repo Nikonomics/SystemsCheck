@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Filter
 } from 'lucide-react';
+import { useTagClick } from './TagClickContext';
 
 /**
  * Severity color mapping
@@ -42,7 +43,7 @@ const SEVERITY_COLORS = {
  */
 const TREND_CONFIG = {
   worsening: { icon: TrendingUp, color: 'text-red-500', bg: 'bg-red-50', label: 'Worsening' },
-  persistent: { icon: Minus, color: 'text-orange-500', bg: 'bg-orange-50', label: 'Persistent' },
+  persistent: { icon: Minus, color: 'text-orange-500', bg: 'bg-orange-50', label: 'Stagnant' },
   improving: { icon: TrendingDown, color: 'text-green-500', bg: 'bg-green-50', label: 'Improving' },
   resolved: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', label: 'Resolved' },
   new: { icon: AlertCircle, color: 'text-blue-500', bg: 'bg-blue-50', label: 'New' }
@@ -86,7 +87,7 @@ const HeatmapCell = ({ citation, onClick }) => {
 /**
  * Tag row with trend indicator
  */
-const TagRow = ({ tag, surveys, onCellClick }) => {
+const TagRow = ({ tag, surveys, onCellClick, onTagClick }) => {
   const TrendIcon = TREND_CONFIG[tag.trend]?.icon || Minus;
   const trendConfig = TREND_CONFIG[tag.trend] || TREND_CONFIG.persistent;
 
@@ -108,7 +109,12 @@ const TagRow = ({ tag, surveys, onCellClick }) => {
             <TrendIcon className={`h-3 w-3 ${trendConfig.color}`} />
           </span>
           <div>
-            <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+            <button
+              onClick={() => onTagClick?.(tag.tag)}
+              className="font-mono text-sm font-medium text-purple-700 hover:text-purple-900 hover:underline cursor-pointer text-left"
+            >
+              {tag.tagFormatted || tag.tag}
+            </button>
             {tag.tagName && tag.tagName !== 'Unknown Tag' && (
               <p className="text-xs text-gray-500 truncate max-w-[180px]">{tag.tagName}</p>
             )}
@@ -165,6 +171,7 @@ const CategoryHeader = ({ category, count, isExpanded, onToggle }) => {
 };
 
 export function TagsHeatmap({ data, loading, error }) {
+  const { onTagClick } = useTagClick();
   const [expandedCategories, setExpandedCategories] = useState({
     health: false,
     life_safety: false,
@@ -273,7 +280,7 @@ export function TagsHeatmap({ data, loading, error }) {
             >
               <option value="all">All Trends</option>
               <option value="worsening">Worsening ({summary.worseningTags})</option>
-              <option value="persistent">Persistent ({summary.persistentTags})</option>
+              <option value="persistent">Stagnant ({summary.persistentTags})</option>
               <option value="improving">Improving ({summary.improvingTags})</option>
               <option value="resolved">Resolved ({summary.resolvedTags})</option>
               <option value="new">New ({summary.newTags})</option>
@@ -342,6 +349,7 @@ export function TagsHeatmap({ data, loading, error }) {
                     tag={tag}
                     surveys={surveys}
                     onCellClick={setSelectedCitation}
+                    onTagClick={onTagClick}
                   />
                 ))}
               </>
@@ -362,6 +370,7 @@ export function TagsHeatmap({ data, loading, error }) {
                     tag={tag}
                     surveys={surveys}
                     onCellClick={setSelectedCitation}
+                    onTagClick={onTagClick}
                   />
                 ))}
               </>
@@ -382,6 +391,7 @@ export function TagsHeatmap({ data, loading, error }) {
                     tag={tag}
                     surveys={surveys}
                     onCellClick={setSelectedCitation}
+                    onTagClick={onTagClick}
                   />
                 ))}
               </>

@@ -1,7 +1,7 @@
 /**
  * SurveyTimelineVisual Component
  *
- * Horizontal visual timeline showing surveys over the last 5 years.
+ * Horizontal visual timeline showing surveys over the last 3 years.
  * Each survey is a dot positioned by date and colored by type.
  */
 
@@ -159,30 +159,30 @@ const LegendItem = ({ config, label }) => {
 export function SurveyTimelineVisual({ surveys, onSurveySelect }) {
   const [selectedSurvey, setSelectedSurvey] = useState(null);
 
-  // Calculate date range (last 5 years)
+  // Calculate date range (last 3 years)
   const { minDate, maxDate, yearMarkers, surveyPositions } = useMemo(() => {
     if (!surveys || surveys.length === 0) {
       return { minDate: null, maxDate: null, yearMarkers: [], surveyPositions: [] };
     }
 
     const now = new Date();
-    const fiveYearsAgo = new Date(now.getFullYear() - 5, 0, 1);
+    const threeYearsAgo = new Date(now.getFullYear() - 3, 0, 1);
     const endDate = new Date(now.getFullYear(), 11, 31);
 
     // Calculate year markers
     const years = [];
-    for (let year = fiveYearsAgo.getFullYear(); year <= endDate.getFullYear(); year++) {
+    for (let year = threeYearsAgo.getFullYear(); year <= endDate.getFullYear(); year++) {
       const yearStart = new Date(year, 0, 1);
-      const position = ((yearStart - fiveYearsAgo) / (endDate - fiveYearsAgo)) * 100;
+      const position = ((yearStart - threeYearsAgo) / (endDate - threeYearsAgo)) * 100;
       years.push({ year, position: Math.max(0, Math.min(100, position)) });
     }
 
     // Calculate survey positions
     const positions = surveys
-      .filter(s => new Date(s.date) >= fiveYearsAgo)
+      .filter(s => new Date(s.date) >= threeYearsAgo)
       .map(survey => {
         const surveyDate = new Date(survey.date);
-        const position = ((surveyDate - fiveYearsAgo) / (endDate - fiveYearsAgo)) * 100;
+        const position = ((surveyDate - threeYearsAgo) / (endDate - threeYearsAgo)) * 100;
         return {
           ...survey,
           position: Math.max(0, Math.min(100, position))
@@ -190,7 +190,7 @@ export function SurveyTimelineVisual({ surveys, onSurveySelect }) {
       });
 
     return {
-      minDate: fiveYearsAgo,
+      minDate: threeYearsAgo,
       maxDate: endDate,
       yearMarkers: years,
       surveyPositions: positions

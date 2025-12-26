@@ -86,3 +86,9 @@ Section definitions for scorecard systems are maintained in:
 - `frontend/src/pages/scorecards/components/SystemTab.jsx` (UI rendering)
 
 When adding sections to a new system, update both files.
+
+## Survey Intelligence
+Before working on Survey Intelligence, Team/Company/Market Views:
+- Read `18_Survey_Intelligence_Architecture.md`
+- Follow established patterns for risk scores, recommendations, context
+- Ensure views link to each other properly

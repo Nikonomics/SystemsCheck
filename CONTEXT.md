@@ -161,6 +161,14 @@ AuditTemplate → AuditTemplateSystem → AuditTemplateItem
 - Tracks createdBy and updatedBy for audit trail
 - Cascading deletes: Deleting a template removes all systems and items
 
+### 8. Survey Intelligence Framework
+See `18_Survey_Intelligence_Architecture.md` for the complete framework:
+- **Survey Analytics** = Raw data ("What happened?")
+- **Survey Intelligence** = Actionable insights ("What should I do?")
+- **Views** = Benchmarks (Market → Company → Team → Facility)
+
+Always reference this document when building Survey Intelligence features.
+
 ## Important Notes & Gotchas
 
 ### 1. Audit Criteria Source of Truth

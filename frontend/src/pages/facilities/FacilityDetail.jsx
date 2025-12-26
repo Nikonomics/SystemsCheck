@@ -86,6 +86,7 @@ export function FacilityDetail() {
   // State
   const [facility, setFacility] = useState(null);
   const [cmsFacility, setCmsFacility] = useState(null);
+  const [cmsBenchmarks, setCmsBenchmarks] = useState(null);
   const [stats, setStats] = useState(null);
   const [currentMonthScorecard, setCurrentMonthScorecard] = useState(null);
   const [scorecards, setScorecards] = useState([]);
@@ -130,6 +131,7 @@ export function FacilityDetail() {
             const cmsData = await getFacilityProfile(facilityData.facility.ccn);
             if (cmsData.success) {
               setCmsFacility(cmsData.facility);
+              setCmsBenchmarks(cmsData.benchmarks);
             }
           } catch (cmsErr) {
             console.error('Error loading CMS data:', cmsErr);
@@ -344,7 +346,7 @@ export function FacilityDetail() {
       )}
 
       {currentTab === 'snapshot' && facility.ccn && (
-        <SnapshotTab facility={getCMSFacilityData()} />
+        <SnapshotTab facility={getCMSFacilityData()} benchmarks={cmsBenchmarks} />
       )}
 
       {currentTab === 'trends' && facility.ccn && (

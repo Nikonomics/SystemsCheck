@@ -9,7 +9,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getMarketPool } = require('../config/marketDatabase');
+const { getMarketPool, getSNFalyzePool } = require('../config/marketDatabase');
 
 // ============================================================================
 // FACILITY SEARCH
@@ -134,41 +134,49 @@ router.get('/snf/:ccn', async (req, res) => {
         federal_provider_number as ccn,
         facility_name as provider_name,
         address, city, state, zip_code, county,
-        phone_number,
+        phone as phone_number,
         overall_rating,
         health_inspection_rating,
         quality_measure_rating as qm_rating,
+        quality_measure_rating as quality_rating,
         staffing_rating,
         certified_beds,
+        total_beds,
+        occupied_beds,
+        occupancy_rate,
         average_residents_per_day,
         ownership_type,
         chain_name,
+        parent_organization,
         latitude,
         longitude,
         in_hospital,
         continuing_care_retirement_community as ccrc,
         special_focus_facility as sff_status,
         abuse_icon,
-        processing_date,
+        cms_processing_date as processing_date,
         -- Staffing data
-        reported_nurse_aide_staffing_hours_per_resident_per_day as reported_na_hrs,
-        reported_lpn_staffing_hours_per_resident_per_day as reported_lpn_hrs,
-        reported_rn_staffing_hours_per_resident_per_day as reported_rn_hrs,
-        reported_licensed_staffing_hours_per_resident_per_day as reported_licensed_hrs,
-        reported_total_nurse_staffing_hours_per_resident_per_day as reported_total_nurse_hrs,
-        reported_physical_therapist_staffing_hours_per_resident_per_day as reported_pt_hrs,
+        reported_cna_staffing_hours as reported_na_hrs,
+        lpn_staffing_hours as reported_lpn_hrs,
+        rn_staffing_hours as reported_rn_hrs,
+        licensed_staffing_hours as reported_licensed_hrs,
+        total_nurse_staffing_hours as reported_total_nurse_hrs,
+        pt_staffing_hours as reported_pt_hrs,
         -- Turnover
-        total_nursing_staff_turnover as total_nursing_turnover,
-        registered_nurse_turnover as rn_turnover,
-        number_of_administrator_departures as administrator_departures,
+        total_nursing_turnover,
+        rn_turnover,
+        admin_departures as administrator_departures,
         -- Deficiencies
-        total_number_of_health_deficiencies as cycle1_total_health_deficiencies,
-        total_number_of_fire_safety_deficiencies as total_fire_deficiencies,
+        health_deficiencies as cycle1_total_health_deficiencies,
+        fire_safety_deficiencies as total_fire_deficiencies,
+        complaint_deficiencies,
         -- Fines
-        total_amount_of_fines_in_dollars as fine_total_dollars,
-        number_of_facility_reported_incidents as facility_reported_incidents,
-        number_of_substantiated_complaints as substantiated_complaints,
-        number_of_citations_from_infection_control_inspections as infection_control_citations
+        total_fines_amount as fine_total_dollars,
+        total_penalties_amount,
+        penalty_count,
+        facility_reported_incidents,
+        substantiated_complaints,
+        infection_control_citations
       FROM snf_facilities
       WHERE federal_provider_number = $1
       LIMIT 1
@@ -214,11 +222,11 @@ router.get('/snf/:ccn', async (req, res) => {
       ORDER BY fiscal_year DESC
     `, [ccn]);
 
-    // Get survey dates
+    // Get survey dates from deficiencies table
     const surveyResult = await pool.query(`
-      SELECT survey_date, survey_type
-      FROM survey_dates
-      WHERE ccn = $1
+      SELECT DISTINCT survey_date, survey_type
+      FROM cms_facility_deficiencies
+      WHERE federal_provider_number = $1
       ORDER BY survey_date DESC
       LIMIT 10
     `, [ccn]);
@@ -226,14 +234,142 @@ router.get('/snf/:ccn', async (req, res) => {
     // Calculate occupancy
     const beds = parseInt(facility.certified_beds) || 1;
     const residents = parseInt(facility.average_residents_per_day) || 0;
-    facility.occupancy_rate = Math.round((residents / beds) * 100);
+    facility.occupancy_rate = facility.occupancy_rate || Math.round((residents / beds) * 100);
+
+    // Get historical snapshots from SNFalyze database (has trends data from 2020-present)
+    let snapshots = [];
+    const snfalyzePool = getSNFalyzePool();
+
+    if (snfalyzePool) {
+      try {
+        const snapshotsResult = await snfalyzePool.query(`
+          SELECT
+            e.extract_date,
+            fs.overall_rating,
+            fs.qm_rating,
+            fs.staffing_rating,
+            fs.health_inspection_rating,
+            fs.reported_total_nurse_hrs,
+            fs.reported_rn_hrs,
+            fs.reported_lpn_hrs,
+            fs.reported_na_hrs,
+            fs.total_nursing_turnover,
+            fs.rn_turnover,
+            fs.cycle1_total_health_deficiencies,
+            fs.certified_beds,
+            fs.average_residents_per_day as average_residents,
+            CASE
+              WHEN fs.certified_beds > 0
+              THEN ROUND((fs.average_residents_per_day::numeric / fs.certified_beds::numeric) * 100)
+              ELSE NULL
+            END as occupancy_rate
+          FROM facility_snapshots fs
+          JOIN cms_extracts e ON fs.extract_id = e.extract_id
+          WHERE fs.ccn = $1
+          ORDER BY e.extract_date ASC
+        `, [ccn]);
+
+        snapshots = snapshotsResult.rows;
+        console.log(`[CMS API] Found ${snapshots.length} historical snapshots for CCN ${ccn}`);
+      } catch (err) {
+        console.error('[CMS API] Error fetching historical snapshots:', err.message);
+      }
+    }
+
+    // Fallback: If no historical data, create single snapshot from current data
+    if (snapshots.length === 0) {
+      snapshots = [{
+        extract_date: facility.processing_date || new Date().toISOString(),
+        overall_rating: facility.overall_rating,
+        qm_rating: facility.qm_rating,
+        staffing_rating: facility.staffing_rating,
+        health_inspection_rating: facility.health_inspection_rating,
+        reported_total_nurse_hrs: facility.reported_total_nurse_hrs,
+        reported_rn_hrs: facility.reported_rn_hrs,
+        reported_lpn_hrs: facility.reported_lpn_hrs,
+        reported_na_hrs: facility.reported_na_hrs,
+        total_nursing_turnover: facility.total_nursing_turnover,
+        rn_turnover: facility.rn_turnover,
+        occupancy_rate: facility.occupancy_rate,
+        cycle1_total_health_deficiencies: facility.cycle1_total_health_deficiencies,
+        total_fire_deficiencies: facility.total_fire_deficiencies,
+      }];
+    }
+
+    // Attach snapshots to facility for frontend
+    facility.snapshots = snapshots;
+
+    // Fetch benchmarks (national, state, market averages)
+    const [nationalResult, stateResult, marketResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          AVG(overall_rating) as avg_overall_rating,
+          AVG(quality_measure_rating) as avg_quality_rating,
+          AVG(staffing_rating) as avg_staffing_rating,
+          AVG(health_inspection_rating) as avg_inspection_rating,
+          AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+          AVG(rn_staffing_hours) as avg_rn_hprd,
+          AVG(lpn_staffing_hours) as avg_lpn_hprd,
+          AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+          AVG(rn_turnover) as avg_rn_turnover,
+          AVG(total_nursing_turnover) as avg_total_turnover,
+          AVG(health_deficiencies) as avg_deficiencies,
+          AVG(occupancy_rate) as avg_occupancy,
+          COUNT(*) as facility_count
+        FROM snf_facilities
+      `),
+      pool.query(`
+        SELECT
+          AVG(overall_rating) as avg_overall_rating,
+          AVG(quality_measure_rating) as avg_quality_rating,
+          AVG(staffing_rating) as avg_staffing_rating,
+          AVG(health_inspection_rating) as avg_inspection_rating,
+          AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+          AVG(rn_staffing_hours) as avg_rn_hprd,
+          AVG(lpn_staffing_hours) as avg_lpn_hprd,
+          AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+          AVG(rn_turnover) as avg_rn_turnover,
+          AVG(total_nursing_turnover) as avg_total_turnover,
+          AVG(health_deficiencies) as avg_deficiencies,
+          AVG(occupancy_rate) as avg_occupancy,
+          COUNT(*) as facility_count
+        FROM snf_facilities
+        WHERE state = $1
+      `, [facility.state]),
+      pool.query(`
+        SELECT
+          AVG(overall_rating) as avg_overall_rating,
+          AVG(quality_measure_rating) as avg_quality_rating,
+          AVG(staffing_rating) as avg_staffing_rating,
+          AVG(health_inspection_rating) as avg_inspection_rating,
+          AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+          AVG(rn_staffing_hours) as avg_rn_hprd,
+          AVG(lpn_staffing_hours) as avg_lpn_hprd,
+          AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+          AVG(rn_turnover) as avg_rn_turnover,
+          AVG(total_nursing_turnover) as avg_total_turnover,
+          AVG(health_deficiencies) as avg_deficiencies,
+          AVG(occupancy_rate) as avg_occupancy,
+          COUNT(*) as facility_count
+        FROM snf_facilities
+        WHERE state = $1 AND county = $2
+      `, [facility.state, facility.county])
+    ]);
+
+    const benchmarks = {
+      national: nationalResult.rows[0],
+      state: stateResult.rows[0],
+      market: marketResult.rows[0]
+    };
 
     res.json({
       success: true,
       facility,
       healthCitations: deficienciesResult.rows,
       vbpScores: vbpResult.rows,
-      surveyDates: surveyResult.rows
+      surveyDates: surveyResult.rows,
+      snapshots,
+      benchmarks
     });
 
   } catch (error) {
@@ -366,16 +502,14 @@ router.get('/snf/:ccn/benchmarks', async (req, res) => {
         AVG(quality_measure_rating) as avg_quality_rating,
         AVG(staffing_rating) as avg_staffing_rating,
         AVG(health_inspection_rating) as avg_inspection_rating,
-        AVG(reported_total_nurse_staffing_hours_per_resident_per_day) as avg_total_nursing_hprd,
-        AVG(reported_rn_staffing_hours_per_resident_per_day) as avg_rn_hprd,
-        AVG(reported_lpn_staffing_hours_per_resident_per_day) as avg_lpn_hprd,
-        AVG(reported_nurse_aide_staffing_hours_per_resident_per_day) as avg_cna_hprd,
-        AVG(registered_nurse_turnover) as avg_rn_turnover,
-        AVG(total_nursing_staff_turnover) as avg_total_turnover,
-        AVG(total_number_of_health_deficiencies) as avg_deficiencies,
-        AVG(CASE WHEN certified_beds > 0
-            THEN average_residents_per_day::float / certified_beds * 100
-            ELSE NULL END) as avg_occupancy,
+        AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+        AVG(rn_staffing_hours) as avg_rn_hprd,
+        AVG(lpn_staffing_hours) as avg_lpn_hprd,
+        AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+        AVG(rn_turnover) as avg_rn_turnover,
+        AVG(total_nursing_turnover) as avg_total_turnover,
+        AVG(health_deficiencies) as avg_deficiencies,
+        AVG(occupancy_rate) as avg_occupancy,
         COUNT(*) as facility_count
       FROM snf_facilities
     `);
@@ -387,16 +521,14 @@ router.get('/snf/:ccn/benchmarks', async (req, res) => {
         AVG(quality_measure_rating) as avg_quality_rating,
         AVG(staffing_rating) as avg_staffing_rating,
         AVG(health_inspection_rating) as avg_inspection_rating,
-        AVG(reported_total_nurse_staffing_hours_per_resident_per_day) as avg_total_nursing_hprd,
-        AVG(reported_rn_staffing_hours_per_resident_per_day) as avg_rn_hprd,
-        AVG(reported_lpn_staffing_hours_per_resident_per_day) as avg_lpn_hprd,
-        AVG(reported_nurse_aide_staffing_hours_per_resident_per_day) as avg_cna_hprd,
-        AVG(registered_nurse_turnover) as avg_rn_turnover,
-        AVG(total_nursing_staff_turnover) as avg_total_turnover,
-        AVG(total_number_of_health_deficiencies) as avg_deficiencies,
-        AVG(CASE WHEN certified_beds > 0
-            THEN average_residents_per_day::float / certified_beds * 100
-            ELSE NULL END) as avg_occupancy,
+        AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+        AVG(rn_staffing_hours) as avg_rn_hprd,
+        AVG(lpn_staffing_hours) as avg_lpn_hprd,
+        AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+        AVG(rn_turnover) as avg_rn_turnover,
+        AVG(total_nursing_turnover) as avg_total_turnover,
+        AVG(health_deficiencies) as avg_deficiencies,
+        AVG(occupancy_rate) as avg_occupancy,
         COUNT(*) as facility_count
       FROM snf_facilities
       WHERE state = $1
@@ -409,16 +541,14 @@ router.get('/snf/:ccn/benchmarks', async (req, res) => {
         AVG(quality_measure_rating) as avg_quality_rating,
         AVG(staffing_rating) as avg_staffing_rating,
         AVG(health_inspection_rating) as avg_inspection_rating,
-        AVG(reported_total_nurse_staffing_hours_per_resident_per_day) as avg_total_nursing_hprd,
-        AVG(reported_rn_staffing_hours_per_resident_per_day) as avg_rn_hprd,
-        AVG(reported_lpn_staffing_hours_per_resident_per_day) as avg_lpn_hprd,
-        AVG(reported_nurse_aide_staffing_hours_per_resident_per_day) as avg_cna_hprd,
-        AVG(registered_nurse_turnover) as avg_rn_turnover,
-        AVG(total_nursing_staff_turnover) as avg_total_turnover,
-        AVG(total_number_of_health_deficiencies) as avg_deficiencies,
-        AVG(CASE WHEN certified_beds > 0
-            THEN average_residents_per_day::float / certified_beds * 100
-            ELSE NULL END) as avg_occupancy,
+        AVG(total_nurse_staffing_hours) as avg_total_nursing_hprd,
+        AVG(rn_staffing_hours) as avg_rn_hprd,
+        AVG(lpn_staffing_hours) as avg_lpn_hprd,
+        AVG(reported_cna_staffing_hours) as avg_cna_hprd,
+        AVG(rn_turnover) as avg_rn_turnover,
+        AVG(total_nursing_turnover) as avg_total_turnover,
+        AVG(health_deficiencies) as avg_deficiencies,
+        AVG(occupancy_rate) as avg_occupancy,
         COUNT(*) as facility_count
       FROM snf_facilities
       WHERE state = $1 AND county = $2

@@ -119,6 +119,41 @@ function monthsSince(date) {
 }
 
 /**
+ * Calculate survey window estimate based on months since last survey
+ * CMS typically surveys SNFs every 9-15 months (average ~12 months)
+ *
+ * @param {number} monthsSinceSurvey - Months since last survey
+ * @returns {string} Human-readable survey window estimate
+ */
+function calculateSurveyWindow(monthsSinceSurvey) {
+  if (monthsSinceSurvey === null || monthsSinceSurvey === undefined) {
+    return 'Unknown';
+  }
+
+  // Overdue: More than 15 months since last survey
+  if (monthsSinceSurvey > 15) {
+    return 'Overdue - expect any time';
+  }
+
+  // Survey window opening: 9-15 months since last survey
+  if (monthsSinceSurvey >= 9) {
+    const monthsUntilOverdue = 15 - monthsSinceSurvey;
+    return `Window open (${monthsUntilOverdue}+ mo remaining)`;
+  }
+
+  // Not expected yet: Less than 9 months since last survey
+  // Calculate months until window opens (at 9 months) and typical survey (at 12 months)
+  const monthsUntilWindow = 9 - monthsSinceSurvey;
+  const monthsUntilTypical = 12 - monthsSinceSurvey;
+
+  if (monthsUntilWindow <= 1) {
+    return 'Window opening soon';
+  }
+
+  return `Not expected for ${monthsUntilTypical}+ months`;
+}
+
+/**
  * Get severity level from scope_severity code (e.g., "D" from "D2" or just "D")
  */
 function getSeverityLevel(scopeSeverity) {
@@ -397,11 +432,7 @@ router.get('/facility/:facilityId/risk-score', authenticateToken, async (req, re
       surveyTiming: {
         lastSurveyDate,
         monthsSinceSurvey: monthsSinceLastSurvey,
-        estimatedWindow: monthsSinceLastSurvey >= 12
-          ? 'Overdue - could be surveyed any time'
-          : monthsSinceLastSurvey >= 9
-            ? '0-3 months'
-            : '3-6 months'
+        estimatedWindow: calculateSurveyWindow(monthsSinceLastSurvey)
       }
     });
 
@@ -1952,11 +1983,9 @@ router.get('/tag/:tag/details', authenticateToken, async (req, res) => {
       }
     }
 
-    // Normalize tag for DB query - need to handle F880 vs F-880 vs 0880
-    let dbTag = normalizedTag;
-    if (!normalizedTag.match(/^[FKLE]/)) {
-      dbTag = 'F' + normalizedTag.padStart(4, '0');
-    }
+    // Normalize tag for DB query - database stores numeric-only format (e.g., "0689" not "F0689")
+    // Strip any prefix (F, K, L, E) and pad to 4 digits
+    let dbTag = normalizedTag.replace(/^[FKLE]/i, '').padStart(4, '0');
 
     // Get facility history for this tag
     let facilityHistory = [];

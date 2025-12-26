@@ -5,7 +5,7 @@ databases:
   - name: systemscheck-db
     databaseName: systemscheck
     user: systemscheck_user
-    plan: starter # $7/month, 1GB storage
+    plan: basic # 1GB storage
     region: oregon
 
 services:
@@ -14,7 +14,7 @@ services:
     name: systemscheck-api
     runtime: node
     region: oregon
-    plan: starter # $7/month
+    plan: free
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
@@ -40,7 +40,6 @@ services:
   - type: web
     name: systemscheck-web
     runtime: static
-    plan: starter # Free for static sites
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist

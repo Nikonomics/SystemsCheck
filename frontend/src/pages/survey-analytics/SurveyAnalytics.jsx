@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   ClipboardCheck,
@@ -7,6 +8,8 @@ import {
   BarChart3,
   TrendingUp,
   Building2,
+  Brain,
+  ArrowRight,
 } from 'lucide-react';
 import { facilitiesApi } from '../../api/facilities';
 import { OverviewTab } from './components/OverviewTab';
@@ -26,6 +29,10 @@ const TABS = [
 ];
 
 export function SurveyAnalytics() {
+  // URL params for deep linking
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlCcn = searchParams.get('ccn');
+
   const [facilities, setFacilities] = useState([]);
   const [selectedFacility, setSelectedFacility] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -48,10 +55,20 @@ export function SurveyAnalytics() {
       );
       setFacilities(snfFacilities);
 
+      // Check for CCN URL param first
+      if (urlCcn) {
+        const urlFacility = snfFacilities.find(f => f.ccn === urlCcn);
+        if (urlFacility) {
+          setSelectedFacility(urlFacility);
+          return;
+        }
+      }
+
       // Auto-select first facility with CCN if available
       const firstWithCcn = snfFacilities.find(f => f.ccn);
       if (firstWithCcn) {
         setSelectedFacility(firstWithCcn);
+        setSearchParams({ ccn: firstWithCcn.ccn }, { replace: true });
       } else if (snfFacilities.length > 0) {
         setSelectedFacility(snfFacilities[0]);
       }
@@ -67,6 +84,12 @@ export function SurveyAnalytics() {
     const facilityId = parseInt(e.target.value);
     const facility = facilities.find(f => f.id === facilityId);
     setSelectedFacility(facility);
+    // Update URL to enable bookmarking/sharing
+    if (facility?.ccn) {
+      setSearchParams({ ccn: facility.ccn });
+    } else {
+      setSearchParams({});
+    }
   };
 
   const renderTabContent = () => {
@@ -190,6 +213,27 @@ export function SurveyAnalytics() {
       <div className="min-h-[400px]">
         {renderTabContent()}
       </div>
+
+      {/* Cross-Navigation Link */}
+      {selectedFacility?.ccn && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mt-6">
+          <Link
+            to={`/survey-intelligence?facilityId=${selectedFacility.id}`}
+            className="flex items-center justify-between group hover:bg-gray-50 rounded-lg p-3 -m-3 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Brain className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900 group-hover:text-purple-600">View Risk Analysis</p>
+                <p className="text-sm text-gray-500">Risk scores, trends, and actionable recommendations</p>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-purple-600" />
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

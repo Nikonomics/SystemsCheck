@@ -103,35 +103,25 @@ export const getFacilityVBP = async (ccn) => {
   return response.data;
 };
 
-/**
- * Get penalty records for a facility (stub - returns empty for now)
- * @param {string} ccn - CMS Certification Number
- * @returns {Promise<Object>} Penalty records
- */
+// ============================================================================
+// DEPRECATED STUB FUNCTIONS
+// These return empty data - penalty/ownership data not available in market DB
+// getFacilityIntelligence is replaced by /survey-intelligence page
+// ============================================================================
+
+/** @deprecated Penalty data not available in market database */
 export const getFacilityPenalties = async (ccn) => {
-  // Penalty data not currently available in market database
-  // Return empty array to prevent errors
   return { success: true, penalties: [] };
 };
 
-/**
- * Get ownership records for a facility (stub - not used in SystemsCheck)
- * @param {string} ccn - CMS Certification Number
- * @returns {Promise<Object>} Ownership records
- */
+/** @deprecated Ownership data excluded per requirements */
 export const getFacilityOwnership = async (ccn) => {
-  // Ownership tab excluded per requirements
   return { success: true, ownership: [] };
 };
 
-/**
- * Get facility survey intelligence (stub - feature not yet available in SystemsCheck)
- * @param {string} ccn - CMS Certification Number
- * @returns {Promise<Object>} Survey intelligence data
- */
+/** @deprecated Use /survey-intelligence page instead */
 export const getFacilityIntelligence = async (ccn) => {
-  // Survey intelligence is a specialized feature not yet available
-  return { success: false, error: 'Feature not available' };
+  return { success: false, error: 'Use /survey-intelligence page instead' };
 };
 
 // ============================================================================

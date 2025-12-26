@@ -21,8 +21,7 @@ import {
   Building,
   Calendar,
   ChevronRight,
-  Loader2,
-  ExternalLink
+  Loader2
 } from 'lucide-react';
 import client from '../../../api/client';
 
@@ -174,9 +173,8 @@ export function TagDetailModal({ isOpen, onClose, tag, facilityId, state }) {
   if (!isOpen) return null;
 
   const handleCoTagClick = (newTag) => {
-    // This would need to be handled by parent - close this modal and open new one
-    // For now, we'll just log it
-    console.log('Navigate to tag:', newTag);
+    // Future: Close this modal and open new one for the clicked tag
+    // For now, co-tag clicks are visual only
   };
 
   return (

@@ -189,7 +189,7 @@ export function RiskScoreCard({ data, loading, error }) {
         </div>
 
         {/* Survey Timing */}
-        <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-center">
           <div className="p-3 bg-white rounded-lg shadow-sm">
             <Calendar className="h-5 w-5 text-gray-400 mx-auto mb-1" />
             <p className="text-xs text-gray-500">Last Survey</p>

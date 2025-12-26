@@ -104,7 +104,7 @@ const TagRow = ({ tag, surveys, onCellClick, onTagClick }) => {
     <tr className="hover:bg-gray-50">
       {/* Tag info */}
       <td className="sticky left-0 bg-white border-r border-gray-200 px-3 py-2 z-10" title={tag.tagDescription}>
-        <div className="flex items-center gap-2 min-w-[200px]">
+        <div className="flex items-center gap-2 min-w-[140px] sm:min-w-[200px]">
           <span className={`p-1 rounded ${trendConfig.bg}`}>
             <TrendIcon className={`h-3 w-3 ${trendConfig.color}`} />
           </span>
@@ -126,7 +126,7 @@ const TagRow = ({ tag, surveys, onCellClick, onTagClick }) => {
       </td>
 
       {/* Citation count */}
-      <td className="sticky left-[224px] bg-white border-r border-gray-200 px-2 py-2 text-center z-10">
+      <td className="sticky left-[164px] sm:left-[224px] bg-white border-r border-gray-200 px-2 py-2 text-center z-10">
         <span className="text-sm text-gray-600">{tag.citationCount}</span>
       </td>
 
@@ -317,10 +317,10 @@ export function TagsHeatmap({ data, loading, error }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-gray-50">
-              <th className="sticky left-0 bg-gray-50 border-r border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider z-20 min-w-[200px]">
+              <th className="sticky left-0 bg-gray-50 border-r border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider z-20 min-w-[140px] sm:min-w-[200px]">
                 Tag
               </th>
-              <th className="sticky left-[224px] bg-gray-50 border-r border-b border-gray-200 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider z-20">
+              <th className="sticky left-[164px] sm:left-[224px] bg-gray-50 border-r border-b border-gray-200 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider z-20">
                 #
               </th>
               {surveys.map(survey => (

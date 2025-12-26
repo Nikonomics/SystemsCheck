@@ -7,11 +7,14 @@
  */
 
 import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   AlertTriangle,
   Brain,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft,
+  FileText
 } from 'lucide-react';
 import { facilitiesApi } from '../../api/facilities';
 import surveyIntelApi from '../../api/surveyIntel';
@@ -26,6 +29,10 @@ import { SurveyTimeline } from './components/SurveyTimeline';
 import { TagClickProvider } from './components/TagClickContext';
 
 export function FacilityIntelligence() {
+  // URL params for deep linking
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlFacilityId = searchParams.get('facilityId');
+
   // State
   const [facilities, setFacilities] = useState([]);
   const [selectedFacility, setSelectedFacility] = useState(null);
@@ -87,12 +94,24 @@ export function FacilityIntelligence() {
       );
       setFacilities(snfFacilities);
 
+      // Check for URL param first
+      if (urlFacilityId) {
+        const urlFacility = snfFacilities.find(f => f.id === parseInt(urlFacilityId));
+        if (urlFacility) {
+          setSelectedFacility(urlFacility);
+          return;
+        }
+      }
+
       // Auto-select first facility with CCN
       const firstWithCcn = snfFacilities.find(f => f.ccn);
       if (firstWithCcn) {
         setSelectedFacility(firstWithCcn);
+        // Update URL to reflect selection
+        setSearchParams({ facilityId: firstWithCcn.id.toString() }, { replace: true });
       } else if (snfFacilities.length > 0) {
         setSelectedFacility(snfFacilities[0]);
+        setSearchParams({ facilityId: snfFacilities[0].id.toString() }, { replace: true });
       }
     } catch (err) {
       console.error('Error loading facilities:', err);
@@ -199,6 +218,10 @@ export function FacilityIntelligence() {
     const facilityId = parseInt(e.target.value);
     const facility = facilities.find(f => f.id === facilityId);
     setSelectedFacility(facility);
+    // Update URL to enable bookmarking/sharing
+    if (facility) {
+      setSearchParams({ facilityId: facility.id.toString() });
+    }
   };
 
   const handleRefresh = () => {
@@ -232,6 +255,16 @@ export function FacilityIntelligence() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          {/* Back link when coming from Facility Profile */}
+          {selectedFacility && (
+            <Link
+              to={`/facilities/${selectedFacility.id}`}
+              className="inline-flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Facility Profile
+            </Link>
+          )}
           <div className="flex items-center gap-2">
             <Brain className="h-6 w-6 text-purple-600" />
             <h1 className="text-2xl font-bold text-gray-900">Survey Intelligence</h1>
@@ -402,6 +435,25 @@ export function FacilityIntelligence() {
                 loading={loadingTimeline}
                 error={timelineError}
               />
+            </div>
+
+            {/* Cross-Navigation Link */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <Link
+                to={`/survey-analytics?ccn=${selectedFacility.ccn}`}
+                className="flex items-center justify-between group hover:bg-gray-50 rounded-lg p-3 -m-3 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 group-hover:text-blue-600">View Full Survey History</p>
+                    <p className="text-sm text-gray-500">Complete survey data, deficiencies, and export options</p>
+                  </div>
+                </div>
+                <ArrowLeft className="h-5 w-5 text-gray-400 group-hover:text-blue-600 rotate-180" />
+              </Link>
             </div>
           </div>
         </TagClickProvider>

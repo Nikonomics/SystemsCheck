@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Plus,
@@ -11,6 +11,13 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
+  ClipboardCheck,
+  Activity,
+  BarChart3,
+  Users,
+  FileText,
+  Calendar,
+  Info,
 } from 'lucide-react';
 import {
   LineChart,
@@ -23,10 +30,23 @@ import {
 } from 'recharts';
 import { facilitiesApi } from '../../api/facilities';
 import { scorecardsApi } from '../../api/scorecards';
+import { getFacilityProfile } from '../../api/cms';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+
+// CMS Tab Components
+import {
+  SnapshotTab,
+  TrendsTab,
+  BenchmarksTab,
+  RiskAnalysisTab,
+  VBPTab,
+  CompetitionTab,
+  ReportsTab,
+  SurveyIntelligenceTab,
+} from '../../components/CMSTabs';
 
 const facilityTypeBadges = {
   SNF: { label: 'Skilled Nursing Facility', variant: 'primary' },
@@ -45,11 +65,27 @@ const monthNames = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+// Tab configuration
+const TABS = [
+  { id: 'scorecards', label: 'Scorecards', icon: ClipboardCheck, requiresCCN: false },
+  { id: 'snapshot', label: 'Snapshot', icon: Activity, requiresCCN: true },
+  { id: 'trends', label: 'Trends', icon: TrendingUp, requiresCCN: true },
+  { id: 'benchmarks', label: 'Benchmarks', icon: BarChart3, requiresCCN: true },
+  { id: 'risk', label: 'Risk Analysis', icon: AlertTriangle, requiresCCN: true },
+  { id: 'vbp', label: 'VBP', icon: Award, requiresCCN: true },
+  { id: 'competition', label: 'Competition', icon: Users, requiresCCN: true },
+  { id: 'reports', label: 'Reports', icon: FileText, requiresCCN: true },
+  { id: 'survey', label: 'Survey Intelligence', icon: Calendar, requiresCCN: true },
+];
+
 export function FacilityDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  // State
   const [facility, setFacility] = useState(null);
+  const [cmsFacility, setCmsFacility] = useState(null);
   const [stats, setStats] = useState(null);
   const [currentMonthScorecard, setCurrentMonthScorecard] = useState(null);
   const [scorecards, setScorecards] = useState([]);
@@ -60,6 +96,14 @@ export function FacilityDetail() {
   const [scorecardPagination, setScorecardPagination] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ open: false, scorecard: null });
   const [deleting, setDeleting] = useState(false);
+
+  // Current tab from URL or default to 'scorecards'
+  const currentTab = searchParams.get('tab') || 'scorecards';
+
+  // Change tab handler
+  const handleTabChange = (tabId) => {
+    setSearchParams({ tab: tabId });
+  };
 
   // Load facility data
   useEffect(() => {
@@ -79,6 +123,19 @@ export function FacilityDetail() {
         setScorecards(scorecardsData.scorecards);
         setScorecardPagination(scorecardsData.pagination);
         setTrendData(trendResponse.trendData);
+
+        // Load CMS data if facility has CCN
+        if (facilityData.facility?.ccn) {
+          try {
+            const cmsData = await getFacilityProfile(facilityData.facility.ccn);
+            if (cmsData.success) {
+              setCmsFacility(cmsData.facility);
+            }
+          } catch (cmsErr) {
+            console.error('Error loading CMS data:', cmsErr);
+            // Don't fail the whole page if CMS data fails
+          }
+        }
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to load facility');
       } finally {
@@ -142,6 +199,20 @@ export function FacilityDetail() {
     return parts.join(', ');
   };
 
+  // Build facility object for CMS tabs (merge local + CMS data)
+  const getCMSFacilityData = () => {
+    if (!facility) return null;
+    return {
+      ...facility,
+      ...cmsFacility,
+      ccn: facility.ccn,
+      federal_provider_number: facility.ccn,
+    };
+  };
+
+  // Filter tabs based on CCN availability
+  const availableTabs = TABS.filter(tab => !tab.requiresCCN || facility?.ccn);
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -184,6 +255,11 @@ export function FacilityDetail() {
             <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
             <Badge variant="default">{facility.team.name}</Badge>
             <Badge variant="default">{facility.company.name}</Badge>
+            {facility.ccn && (
+              <Badge variant="primary" title="CMS Certification Number">
+                CCN: {facility.ccn}
+              </Badge>
+            )}
           </div>
           {formatAddress() && (
             <p className="text-sm text-gray-500 mt-2">{formatAddress()}</p>
@@ -191,24 +267,176 @@ export function FacilityDetail() {
         </div>
 
         {/* New Scorecard button */}
-        {!currentMonthScorecard && (
-          <Link to={`/facilities/${id}/scorecards/new`}>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Scorecard
-            </Button>
-          </Link>
-        )}
-        {currentMonthScorecard && currentMonthScorecard.status === 'draft' && (
-          <Link to={`/scorecards/${currentMonthScorecard.id}/edit`}>
-            <Button>
-              <Pencil className="h-4 w-4 mr-2" />
-              Continue Current Scorecard
-            </Button>
-          </Link>
+        {currentTab === 'scorecards' && (
+          <>
+            {!currentMonthScorecard && (
+              <Link to={`/facilities/${id}/scorecards/new`}>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Scorecard
+                </Button>
+              </Link>
+            )}
+            {currentMonthScorecard && currentMonthScorecard.status === 'draft' && (
+              <Link to={`/scorecards/${currentMonthScorecard.id}/edit`}>
+                <Button>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Continue Current Scorecard
+                </Button>
+              </Link>
+            )}
+          </>
         )}
       </div>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+          {availableTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = currentTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
+                  ${isActive
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }
+                `}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* No CCN Notice */}
+      {!facility.ccn && currentTab !== 'scorecards' && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex items-start gap-3">
+          <Info className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">CMS Data Not Available</p>
+            <p className="text-sm mt-1">
+              This facility is not linked to CMS data. The CCN (CMS Certification Number) is required to view
+              ratings, benchmarks, and other CMS data.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content */}
+      {currentTab === 'scorecards' && (
+        <ScorecardsTabContent
+          facility={facility}
+          stats={stats}
+          scorecards={scorecards}
+          trendData={trendData}
+          scorecardPage={scorecardPage}
+          scorecardPagination={scorecardPagination}
+          loadMoreScorecards={loadMoreScorecards}
+          setDeleteModal={setDeleteModal}
+        />
+      )}
+
+      {currentTab === 'snapshot' && facility.ccn && (
+        <SnapshotTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'trends' && facility.ccn && (
+        <TrendsTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'benchmarks' && facility.ccn && (
+        <BenchmarksTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'risk' && facility.ccn && (
+        <RiskAnalysisTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'vbp' && facility.ccn && (
+        <VBPTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'competition' && facility.ccn && (
+        <CompetitionTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'reports' && facility.ccn && (
+        <ReportsTab facility={getCMSFacilityData()} />
+      )}
+
+      {currentTab === 'survey' && facility.ccn && (
+        <SurveyIntelligenceTab facility={getCMSFacilityData()} />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, scorecard: null })}
+        title="Delete Scorecard"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 p-2 bg-red-100 rounded-full">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-gray-700">
+                Are you sure you want to delete the scorecard for{' '}
+                <strong>
+                  {deleteModal.scorecard && `${monthNames[deleteModal.scorecard.month - 1]} ${deleteModal.scorecard.year}`}
+                </strong>
+                ?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                This action cannot be undone. All data including system scores, item responses, and resident information will be permanently deleted.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteModal({ open: false, scorecard: null })}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteScorecard}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Scorecard'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// Extracted Scorecards Tab Content
+function ScorecardsTabContent({
+  facility,
+  stats,
+  scorecards,
+  trendData,
+  scorecardPage,
+  scorecardPagination,
+  loadMoreScorecards,
+  setDeleteModal,
+}) {
+  const { id } = useParams();
+
+  return (
+    <>
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -438,50 +666,6 @@ export function FacilityDetail() {
           </div>
         )}
       </Card>
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={deleteModal.open}
-        onClose={() => setDeleteModal({ open: false, scorecard: null })}
-        title="Delete Scorecard"
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 p-2 bg-red-100 rounded-full">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-gray-700">
-                Are you sure you want to delete the scorecard for{' '}
-                <strong>
-                  {deleteModal.scorecard && `${monthNames[deleteModal.scorecard.month - 1]} ${deleteModal.scorecard.year}`}
-                </strong>
-                ?
-              </p>
-              <p className="text-sm text-gray-500 mt-2">
-                This action cannot be undone. All data including system scores, item responses, and resident information will be permanently deleted.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteModal({ open: false, scorecard: null })}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleDeleteScorecard}
-              disabled={deleting}
-            >
-              {deleting ? 'Deleting...' : 'Delete Scorecard'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
+    </>
   );
 }

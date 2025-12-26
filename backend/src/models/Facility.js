@@ -46,6 +46,12 @@ const Facility = sequelize.define('Facility', {
     allowNull: true,
     field: 'zip_code'
   },
+  ccn: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    field: 'ccn',
+    comment: 'CMS Certification Number for linking to CMS data'
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

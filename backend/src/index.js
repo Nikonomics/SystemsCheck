@@ -13,12 +13,21 @@ const reportRoutes = require('./routes/reports');
 const organizationRoutes = require('./routes/organization');
 const importRoutes = require('./routes/import');
 const templateRoutes = require('./routes/template');
+const cmsDataRoutes = require('./routes/cmsData');
+const { closeMarketPool } = require('./config/marketDatabase');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+// CORS configuration - restrict in production
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -60,6 +69,7 @@ app.use('/api', reportRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/admin/template', templateRoutes);
+app.use('/api/cms', cmsDataRoutes);
 
 // Database sync and server start
 async function startServer() {
@@ -86,5 +96,20 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received. Closing connections...');
+  await closeMarketPool();
+  await sequelize.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received. Closing connections...');
+  await closeMarketPool();
+  await sequelize.close();
+  process.exit(0);
+});
 
 module.exports = app;

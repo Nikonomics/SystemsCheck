@@ -56,13 +56,14 @@ const GeoTrendRow = ({ trend, icon: Icon }) => {
         <div>
           <p className="font-medium text-gray-900">{trend.name}</p>
           <p className="text-xs text-gray-500">
-            {trend.facilitiesCited} of {trend.totalFacilities} facilities ({trend.percentFacilities}%)
+            {trend.facilitiesCited} of {trend.totalFacilities} facilities
           </p>
         </div>
       </div>
       <div className="text-right">
         <p className="text-sm font-medium text-gray-900">{trend.citations} citations</p>
         <TrendBadge trend={trend.trend} percent={Math.abs(trend.yoyChange)} />
+        <p className="text-xs text-gray-500 mt-0.5">{trend.percentFacilities}% of facilities</p>
       </div>
     </div>
   );

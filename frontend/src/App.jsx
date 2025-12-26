@@ -19,6 +19,7 @@ const TeamComparison = lazy(() => import('./pages/reports/TeamComparison').then(
 const CompanyComparison = lazy(() => import('./pages/reports/CompanyComparison').then(m => ({ default: m.CompanyComparison })));
 const FacilityComparison = lazy(() => import('./pages/reports/FacilityComparison').then(m => ({ default: m.FacilityComparison })));
 const SystemAnalysis = lazy(() => import('./pages/reports/SystemAnalysis').then(m => ({ default: m.SystemAnalysis })));
+const SurveyAnalytics = lazy(() => import('./pages/survey-analytics/SurveyAnalytics').then(m => ({ default: m.SurveyAnalytics })));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
 const OrganizationManagement = lazy(() => import('./pages/admin/OrganizationManagement').then(m => ({ default: m.OrganizationManagement })));
 const Settings = lazy(() => import('./pages/admin/Settings'));
@@ -64,6 +65,7 @@ function App() {
             <Route path="/reports/companies" element={<Suspense fallback={<PageLoader />}><CompanyComparison /></Suspense>} />
             <Route path="/reports/facilities" element={<Suspense fallback={<PageLoader />}><FacilityComparison /></Suspense>} />
             <Route path="/reports/systems" element={<Suspense fallback={<PageLoader />}><SystemAnalysis /></Suspense>} />
+            <Route path="/survey-analytics" element={<Suspense fallback={<PageLoader />}><SurveyAnalytics /></Suspense>} />
             <Route path="/profile" element={<Suspense fallback={<PageLoader />}><UserProfile /></Suspense>} />
             <Route
               path="/admin/users"

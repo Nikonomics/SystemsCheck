@@ -92,9 +92,9 @@ export function AuditItemRow({
         <td className="px-3 py-3 w-24">
           <input
             ref={chartsMetRef}
-            type="number"
-            min="0"
-            max={item.sampleSize || 99}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={item.chartsMet ?? ''}
             onChange={(e) => handleChange('chartsMet', e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, 'chartsMet')}
@@ -115,9 +115,9 @@ export function AuditItemRow({
         <td className="px-3 py-3 w-24">
           <input
             ref={sampleSizeRef}
-            type="number"
-            min="1"
-            max="99"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={item.sampleSize ?? ''}
             onChange={(e) => handleChange('sampleSize', e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, 'sampleSize')}

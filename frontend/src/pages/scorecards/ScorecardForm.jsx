@@ -102,14 +102,26 @@ export function ScorecardForm() {
       } catch (err) {
         console.error('Error loading scorecard:', err);
         const message = err.response?.data?.message || 'Failed to load scorecard';
-        setError(message);
 
-        if (err.response?.status === 404) {
+        if (err.response?.status === 409) {
+          // Scorecard already exists for this month - redirect to it
+          const existingId = err.response?.data?.existingId;
+          if (existingId) {
+            toast.info('Scorecard already exists for this month. Opening it.');
+            navigate(`/scorecards/${existingId}/edit`, { replace: true });
+          } else {
+            // If no ID provided, go back to facility and let user find it
+            toast.error('A scorecard already exists for this month');
+            navigate(`/facilities/${facilityId}`);
+          }
+        } else if (err.response?.status === 404) {
           toast.error('Scorecard not found');
           navigate('/facilities');
         } else if (err.response?.status === 403) {
           toast.error("You don't have access to this scorecard");
           navigate('/facilities');
+        } else {
+          setError(message);
         }
       } finally {
         setLoading(false);

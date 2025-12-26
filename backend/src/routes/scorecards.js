@@ -436,7 +436,8 @@ router.post('/facilities/:facilityId/scorecards', canAccessFacility('facilityId'
       await transaction.rollback();
       return res.status(409).json({
         error: 'Conflict',
-        message: `A scorecard already exists for ${month}/${year}`
+        message: `A scorecard already exists for ${month}/${year}`,
+        existingId: existing.id
       });
     }
 

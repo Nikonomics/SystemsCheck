@@ -133,3 +133,58 @@ export const getFacilityIntelligence = async (ccn) => {
   // Survey intelligence is a specialized feature not yet available
   return { success: false, error: 'Feature not available' };
 };
+
+// ============================================================================
+// SURVEY ANALYTICS API FUNCTIONS
+// ============================================================================
+
+/**
+ * Get survey summary for overview tab
+ * @param {string} ccn - CMS Certification Number
+ * @returns {Promise<Object>} Survey summary with ratings, last surveys, alerts
+ */
+export const getSurveySummary = async (ccn) => {
+  const response = await client.get(`${CMS_BASE}/snf/${ccn}/survey-summary`);
+  return response.data;
+};
+
+/**
+ * Get all surveys (health and fire safety) for a facility
+ * @param {string} ccn - CMS Certification Number
+ * @returns {Promise<Object>} Survey list with dates and deficiency counts
+ */
+export const getSurveys = async (ccn) => {
+  const response = await client.get(`${CMS_BASE}/snf/${ccn}/surveys`);
+  return response.data;
+};
+
+/**
+ * Get deficiency analysis with category, severity, and trend breakdowns
+ * @param {string} ccn - CMS Certification Number
+ * @param {Object} params - Optional filters (startDate, endDate, surveyType)
+ * @returns {Promise<Object>} Deficiency analysis data
+ */
+export const getDeficiencyAnalysis = async (ccn, params = {}) => {
+  const response = await client.get(`${CMS_BASE}/snf/${ccn}/deficiency-analysis`, { params });
+  return response.data;
+};
+
+/**
+ * Get fire safety citations and surveys
+ * @param {string} ccn - CMS Certification Number
+ * @returns {Promise<Object>} Fire safety data with K-tags and E-tags
+ */
+export const getFireSafety = async (ccn) => {
+  const response = await client.get(`${CMS_BASE}/snf/${ccn}/fire-safety`);
+  return response.data;
+};
+
+/**
+ * Get quality measure scores with benchmarks
+ * @param {string} ccn - CMS Certification Number
+ * @returns {Promise<Object>} QM ratings with state/national comparisons
+ */
+export const getQualityMeasures = async (ccn) => {
+  const response = await client.get(`${CMS_BASE}/snf/${ccn}/quality-measures`);
+  return response.data;
+};

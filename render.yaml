@@ -40,7 +40,6 @@ services:
   - type: web
     name: systemscheck-web
     runtime: static
-    region: oregon
     plan: starter # Free for static sites
     rootDir: frontend
     buildCommand: npm install && npm run build

@@ -14,6 +14,7 @@ const organizationRoutes = require('./routes/organization');
 const importRoutes = require('./routes/import');
 const templateRoutes = require('./routes/template');
 const cmsDataRoutes = require('./routes/cmsData');
+const surveyIntelRoutes = require('./routes/surveyIntel');
 const { closeMarketPool } = require('./config/marketDatabase');
 
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api/organization', organizationRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/admin/template', templateRoutes);
 app.use('/api/cms', cmsDataRoutes);  // CMS routes are public - must be before general /api routes
+app.use('/api/survey-intel', surveyIntelRoutes);  // Survey Intelligence - authenticated
 app.use('/api', scorecardRoutes);     // Has router.use(authenticateToken)
 app.use('/api', facilityRoutes);      // Has authenticateToken on each route
 app.use('/api', reportRoutes);        // Has authenticateToken on each route

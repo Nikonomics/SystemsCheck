@@ -18,8 +18,12 @@ const OccupancyTrendsChart = ({ data }) => {
       .sort((a, b) => new Date(a.extract_date) - new Date(b.extract_date))
       .map((snapshot) => {
         const beds = parseInt(snapshot.certified_beds) || 1;
-        const residents = parseFloat(snapshot.average_residents_per_day) || 0;
-        const occupancy = Math.round((residents / beds) * 100);
+        // Handle both field names: average_residents (from snapshots) or average_residents_per_day
+        const residents = parseFloat(snapshot.average_residents || snapshot.average_residents_per_day) || 0;
+        // Use pre-calculated occupancy_rate if available, otherwise calculate
+        const occupancy = snapshot.occupancy_rate != null
+          ? parseInt(snapshot.occupancy_rate)
+          : Math.round((residents / beds) * 100);
         return {
           date: new Date(snapshot.extract_date).toLocaleDateString('en-US', {
             month: 'short',

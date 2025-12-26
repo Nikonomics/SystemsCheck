@@ -215,5 +215,31 @@ Was showing 800 max points, fixed to 700 (7 scored systems × 100)
 ## Active Blockers
 - **completedBy API**: Commented out until DB columns added
 
+## Development Rules
+
+### External Database Queries (snf_market_data)
+Before writing ANY SQL query against the external snf_market_data database:
+1. **Check the Data Dictionary first**: `/Users/nikolashulewsky/Desktop/17_Data_Dictionary.md`
+2. **If column isn't documented**, query information_schema:
+   ```sql
+   SELECT column_name FROM information_schema.columns
+   WHERE table_name = 'table_name' AND column_name LIKE '%keyword%';
+   ```
+3. **Never guess column names** - they often differ from expectations (e.g., `federal_provider_number` not `ccn`, `sprinkler_status` may be named differently)
+4. **Update the Data Dictionary** when you discover new columns
+
+### Known Column Name Gotchas
+| Expected | Actual Column | Table |
+|----------|---------------|-------|
+| `ccn` | `federal_provider_number` | snf_facilities |
+| `sprinkler_status` | `has_sprinkler_system` | snf_facilities |
+| `scope_severity` | `scope_severity_code` | fire_safety_citations |
+| `state` | Must JOIN from snf_facilities | cms_facility_deficiencies |
+
+### Critical Tables for Survey Intelligence
+- **snf_facilities**: 101 columns - facility demographics, ratings, staffing, penalties
+- **cms_facility_deficiencies**: 15 columns - health survey deficiencies
+- **fire_safety_citations**: 17 columns - life safety code deficiencies
+
 ---
-*Last Updated: 2025-12-25*
+*Last Updated: 2025-12-26*

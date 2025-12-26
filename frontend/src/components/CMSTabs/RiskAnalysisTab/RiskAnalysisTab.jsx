@@ -6,7 +6,6 @@ import RegulatoryRiskCard from './RegulatoryRiskCard';
 import StaffingRiskCard from './StaffingRiskCard';
 import FinancialRiskCard from './FinancialRiskCard';
 import RiskTrendCard from './RiskTrendCard';
-import SurveyHistory from './SurveyHistory';
 
 const RiskAnalysisTab = ({ facility, benchmarks }) => {
   if (!facility) {
@@ -36,13 +35,6 @@ const RiskAnalysisTab = ({ facility, benchmarks }) => {
 
       {/* Row 3: Risk Trend */}
       <RiskTrendCard facility={facility} snapshots={facility.snapshots || []} />
-
-      {/* Row 4: Survey History */}
-      <SurveyHistory
-        surveyDates={facility.surveyDates || []}
-        ccn={facility.federal_provider_number}
-        facilityName={facility.provider_name}
-      />
     </div>
   );
 };

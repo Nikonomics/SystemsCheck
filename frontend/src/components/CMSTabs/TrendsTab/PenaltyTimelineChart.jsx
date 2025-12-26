@@ -11,24 +11,36 @@ import {
 import { DollarSign } from 'lucide-react';
 
 const PenaltyTimelineChart = ({ data }) => {
+  // Data is now an array of penalty events: [{date, amount}, ...]
   const chartData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+
     return data
-      .filter((s) => s.extract_date)
-      .sort((a, b) => new Date(a.extract_date) - new Date(b.extract_date))
-      .map((snapshot) => ({
-        date: new Date(snapshot.extract_date).toLocaleDateString('en-US', {
+      .filter((event) => event.date)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map((event) => ({
+        date: new Date(event.date).toLocaleDateString('en-US', {
           month: 'short',
           year: '2-digit',
         }),
-        amount: parseFloat(snapshot.fine_total_dollars) || 0,
-        count: parseInt(snapshot.fine_count) || 0,
+        amount: parseFloat(event.amount) || 0,
       }));
   }, [data]);
 
-  if (chartData.length === 0) {
+  // Check if there's any actual penalty data
+  const hasAnyPenalties = chartData.length > 0 && chartData.some(d => d.amount > 0);
+
+  if (!hasAnyPenalties) {
     return (
-      <div className="trend-chart-card empty">
-        <p>No penalty data available</p>
+      <div className="trend-chart-card">
+        <div className="chart-header">
+          <DollarSign size={18} className="status-good" />
+          <h4>Penalty History</h4>
+        </div>
+        <div className="chart-empty-state">
+          <p style={{ color: '#22c55e', fontWeight: 500 }}>No penalties assessed</p>
+          <p style={{ fontSize: '12px', color: '#6b7280' }}>This facility has no recorded CMS penalties</p>
+        </div>
       </div>
     );
   }

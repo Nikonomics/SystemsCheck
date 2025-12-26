@@ -6,7 +6,7 @@ import StarRatingsCard from './StarRatingsCard';
 import KeyMetricsComparisonCard from './KeyMetricsComparisonCard';
 import FinancialIndicatorsCard from './FinancialIndicatorsCard';
 import RiskFlagsCard from './RiskFlagsCard';
-import OwnershipContextCard from './OwnershipContextCard';
+import MarketTeamCompanyCard from './OwnershipContextCard';
 import FacilityMapCard from './FacilityMapCard';
 import CovidVaccinationCard from './CovidVaccinationCard';
 import VBPPerformanceCard from './VBPPerformanceCard';
@@ -49,10 +49,10 @@ const SnapshotTab = ({ facility, comparisonMode, benchmarks }) => {
         <VBPPerformanceCard facility={facility} />
       </div>
 
-      {/* Row 5: Survey History + Ownership */}
+      {/* Row 5: Survey History + Market/Team/Company */}
       <div className="snapshot-row">
         <SurveyInfoCard facility={facility} />
-        <OwnershipContextCard facility={facility} />
+        <MarketTeamCompanyCard facility={facility} />
       </div>
 
       {/* Row 6: Location Map with Competitors */}

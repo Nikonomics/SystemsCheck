@@ -130,7 +130,11 @@ export function FacilityDetail() {
           try {
             const cmsData = await getFacilityProfile(facilityData.facility.ccn);
             if (cmsData.success) {
-              setCmsFacility(cmsData.facility);
+              // Include penaltyEvents in the facility object for TrendsTab
+              setCmsFacility({
+                ...cmsData.facility,
+                penaltyEvents: cmsData.penaltyEvents || []
+              });
               setCmsBenchmarks(cmsData.benchmarks);
             }
           } catch (cmsErr) {
@@ -354,7 +358,7 @@ export function FacilityDetail() {
       )}
 
       {currentTab === 'risk' && facility.ccn && (
-        <RiskAnalysisTab facility={getCMSFacilityData()} />
+        <RiskAnalysisTab facility={getCMSFacilityData()} benchmarks={cmsBenchmarks} />
       )}
 
       {currentTab === 'vbp' && facility.ccn && (

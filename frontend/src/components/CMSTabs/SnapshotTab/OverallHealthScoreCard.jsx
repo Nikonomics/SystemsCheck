@@ -113,26 +113,31 @@ const OverallHealthScoreCard = ({ facility }) => {
       : null;
 
     // Staffing Score (0-100) - based on staffing_rating and turnover
+    const totalTurnover = parseFloat(facility.total_nursing_turnover || facility.total_turnover_rate || 50);
     const staffingScore = facility.staffing_rating
       ? Math.round(
           ((facility.staffing_rating / 5) * 50) +
-          ((1 - Math.min(facility.total_turnover_rate || 50, 100) / 100) * 50)
+          ((1 - Math.min(totalTurnover, 100) / 100) * 50)
         )
       : null;
 
     // Compliance Score (0-100) - inverse of deficiencies and penalties
+    const healthDeficiencies = facility.cycle1_total_health_deficiencies || facility.total_deficiencies || 0;
+    const fireDeficiencies = facility.total_fire_deficiencies || 0;
     const complianceScore = Math.round(
       Math.max(0, 100 -
-        ((facility.total_deficiencies || 0) * 5) -
+        (healthDeficiencies * 5) -
+        (fireDeficiencies * 0.17) -
         ((facility.total_penalties_amount || 0) / 10000)
       )
     );
 
     // Stability Score (0-100) - admin tenure and RN turnover
+    const rnTurnover = parseFloat(facility.rn_turnover || facility.rn_turnover_rate || 30);
     const stabilityScore = Math.round(
       Math.min(100,
         ((facility.administrator_days_in_role || 365) / 730) * 50 +
-        ((1 - (facility.rn_turnover_rate || 30) / 100) * 50)
+        ((1 - rnTurnover / 100) * 50)
       )
     );
 

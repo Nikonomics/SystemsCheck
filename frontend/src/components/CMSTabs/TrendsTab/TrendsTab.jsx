@@ -20,6 +20,8 @@ const TrendsTab = ({ facility }) => {
 
   // Use snapshots from facility object
   const historicalData = facility.snapshots || [];
+  // Penalty events come from facility_events table
+  const penaltyEvents = facility.penaltyEvents || [];
 
   if (historicalData.length === 0) {
     return (
@@ -39,7 +41,7 @@ const TrendsTab = ({ facility }) => {
         <TurnoverTrendsChart data={historicalData} />
         <OccupancyTrendsChart data={historicalData} />
         <DeficiencyHistoryChart data={historicalData} />
-        <PenaltyTimelineChart data={historicalData} />
+        <PenaltyTimelineChart data={penaltyEvents} />
       </div>
     </div>
   );

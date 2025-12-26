@@ -231,12 +231,16 @@ router.get('/snf/:ccn', async (req, res) => {
       LIMIT 10
     `, [ccn]);
 
-    // Calculate occupancy
-    const beds = parseInt(facility.certified_beds) || 1;
-    const residents = parseInt(facility.average_residents_per_day) || 0;
-    facility.occupancy_rate = facility.occupancy_rate || Math.round((residents / beds) * 100);
+    // Get fire safety deficiency count (for compliance score calculation)
+    const fireDeficiencyResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM fire_safety_citations
+      WHERE ccn = $1
+    `, [ccn]);
+    facility.total_fire_deficiencies = parseInt(fireDeficiencyResult.rows[0]?.count || 0);
 
     // Get historical snapshots from SNFalyze database (has trends data from 2020-present)
+    // IMPORTANT: Use the LATEST snapshot for current data since snf_facilities may be stale
     let snapshots = [];
     const snfalyzePool = getSNFalyzePool();
 
@@ -271,9 +275,42 @@ router.get('/snf/:ccn', async (req, res) => {
 
         snapshots = snapshotsResult.rows;
         console.log(`[CMS API] Found ${snapshots.length} historical snapshots for CCN ${ccn}`);
+
+        // Use the LATEST snapshot data for current facility values (snf_facilities may be stale)
+        if (snapshots.length > 0) {
+          const latestSnapshot = snapshots[snapshots.length - 1];
+          console.log(`[CMS API] Using latest snapshot from ${latestSnapshot.extract_date} for current data`);
+
+          // Overlay latest snapshot values onto facility data
+          if (latestSnapshot.overall_rating != null) facility.overall_rating = latestSnapshot.overall_rating;
+          if (latestSnapshot.qm_rating != null) facility.qm_rating = latestSnapshot.qm_rating;
+          if (latestSnapshot.qm_rating != null) facility.quality_rating = latestSnapshot.qm_rating;
+          if (latestSnapshot.staffing_rating != null) facility.staffing_rating = latestSnapshot.staffing_rating;
+          if (latestSnapshot.health_inspection_rating != null) facility.health_inspection_rating = latestSnapshot.health_inspection_rating;
+          if (latestSnapshot.reported_total_nurse_hrs != null) facility.reported_total_nurse_hrs = latestSnapshot.reported_total_nurse_hrs;
+          if (latestSnapshot.reported_rn_hrs != null) facility.reported_rn_hrs = latestSnapshot.reported_rn_hrs;
+          if (latestSnapshot.reported_lpn_hrs != null) facility.reported_lpn_hrs = latestSnapshot.reported_lpn_hrs;
+          if (latestSnapshot.reported_na_hrs != null) facility.reported_na_hrs = latestSnapshot.reported_na_hrs;
+          if (latestSnapshot.total_nursing_turnover != null) facility.total_nursing_turnover = latestSnapshot.total_nursing_turnover;
+          if (latestSnapshot.rn_turnover != null) facility.rn_turnover = latestSnapshot.rn_turnover;
+          if (latestSnapshot.cycle1_total_health_deficiencies != null) facility.cycle1_total_health_deficiencies = latestSnapshot.cycle1_total_health_deficiencies;
+          if (latestSnapshot.certified_beds != null) facility.certified_beds = latestSnapshot.certified_beds;
+          if (latestSnapshot.average_residents != null) facility.average_residents_per_day = latestSnapshot.average_residents;
+          if (latestSnapshot.occupancy_rate != null) facility.occupancy_rate = latestSnapshot.occupancy_rate;
+
+          // Add extract date to facility response so frontend knows data freshness
+          facility.cms_extract_date = latestSnapshot.extract_date;
+        }
       } catch (err) {
         console.error('[CMS API] Error fetching historical snapshots:', err.message);
       }
+    }
+
+    // Calculate occupancy if not set from snapshots
+    if (!facility.occupancy_rate) {
+      const beds = parseInt(facility.certified_beds) || 1;
+      const residents = parseInt(facility.average_residents_per_day) || 0;
+      facility.occupancy_rate = Math.round((residents / beds) * 100);
     }
 
     // Fallback: If no historical data, create single snapshot from current data
@@ -298,6 +335,28 @@ router.get('/snf/:ccn', async (req, res) => {
 
     // Attach snapshots to facility for frontend
     facility.snapshots = snapshots;
+
+    // Get penalty events from facility_events table
+    let penaltyEvents = [];
+    try {
+      const penaltyResult = await pool.query(`
+        SELECT
+          event_date,
+          new_value as amount,
+          previous_value,
+          change_magnitude
+        FROM facility_events
+        WHERE ccn = $1 AND event_type = 'PENALTY_ISSUED'
+        ORDER BY event_date ASC
+      `, [ccn]);
+      penaltyEvents = penaltyResult.rows.map(row => ({
+        date: row.event_date,
+        amount: parseFloat(row.amount) || 0,
+      }));
+      console.log(`[CMS API] Found ${penaltyEvents.length} penalty events for CCN ${ccn}`);
+    } catch (err) {
+      console.error('[CMS API] Error fetching penalty events:', err.message);
+    }
 
     // Fetch benchmarks (national, state, market averages)
     const [nationalResult, stateResult, marketResult] = await Promise.all([
@@ -369,6 +428,7 @@ router.get('/snf/:ccn', async (req, res) => {
       vbpScores: vbpResult.rows,
       surveyDates: surveyResult.rows,
       snapshots,
+      penaltyEvents,
       benchmarks
     });
 
@@ -951,6 +1011,51 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
 
     const facility = facilityResult.rows[0];
 
+    // Get latest snapshot data to overlay on stale snf_facilities values
+    const snfalyzePool = getSNFalyzePool();
+    if (snfalyzePool) {
+      try {
+        const latestSnapshotResult = await snfalyzePool.query(`
+          SELECT
+            fs.overall_rating,
+            fs.qm_rating,
+            fs.staffing_rating,
+            fs.health_inspection_rating,
+            fs.reported_total_nurse_hrs,
+            fs.reported_rn_hrs,
+            fs.rn_turnover,
+            fs.total_nursing_turnover,
+            fs.cycle1_total_health_deficiencies as health_deficiencies,
+            CASE
+              WHEN fs.certified_beds > 0
+              THEN ROUND((fs.average_residents_per_day::numeric / fs.certified_beds::numeric) * 100)
+              ELSE NULL
+            END as occupancy_rate
+          FROM facility_snapshots fs
+          JOIN cms_extracts e ON fs.extract_id = e.extract_id
+          WHERE fs.ccn = $1
+          ORDER BY e.extract_date DESC
+          LIMIT 1
+        `, [ccn]);
+
+        if (latestSnapshotResult.rows.length > 0) {
+          const snapshot = latestSnapshotResult.rows[0];
+          // Overlay latest snapshot values onto facility (snf_facilities may be stale)
+          if (snapshot.overall_rating != null) facility.overall_rating = snapshot.overall_rating;
+          if (snapshot.qm_rating != null) facility.quality_measure_rating = snapshot.qm_rating;
+          if (snapshot.staffing_rating != null) facility.staffing_rating = snapshot.staffing_rating;
+          if (snapshot.health_inspection_rating != null) facility.health_inspection_rating = snapshot.health_inspection_rating;
+          if (snapshot.reported_total_nurse_hrs != null) facility.total_nurse_staffing_hours = parseFloat(snapshot.reported_total_nurse_hrs);
+          if (snapshot.reported_rn_hrs != null) facility.rn_staffing_hours = parseFloat(snapshot.reported_rn_hrs);
+          if (snapshot.rn_turnover != null) facility.rn_turnover = parseFloat(snapshot.rn_turnover);
+          if (snapshot.health_deficiencies != null) facility.health_deficiencies = snapshot.health_deficiencies;
+          if (snapshot.occupancy_rate != null) facility.occupancy_rate = parseFloat(snapshot.occupancy_rate);
+        }
+      } catch (err) {
+        console.error('[CMS API] Error fetching latest snapshot for percentiles:', err.message);
+      }
+    }
+
     // Build WHERE clause based on peer group filters
     let whereClause = 'WHERE 1=1';
     const params = [ccn];
@@ -984,10 +1089,10 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
       { key: 'quality_rating', field: 'quality_measure_rating', higherIsBetter: true },
       { key: 'staffing_rating', field: 'staffing_rating', higherIsBetter: true },
       { key: 'inspection_rating', field: 'health_inspection_rating', higherIsBetter: true },
-      { key: 'total_nursing_hprd', field: 'reported_total_nurse_staffing_hours_per_resident_per_day', higherIsBetter: true },
-      { key: 'rn_hprd', field: 'reported_rn_staffing_hours_per_resident_per_day', higherIsBetter: true },
-      { key: 'rn_turnover', field: 'registered_nurse_turnover', higherIsBetter: false },
-      { key: 'deficiency_count', field: 'total_number_of_health_deficiencies', higherIsBetter: false }
+      { key: 'total_nursing_hprd', field: 'total_nurse_staffing_hours', higherIsBetter: true },
+      { key: 'rn_hprd', field: 'rn_staffing_hours', higherIsBetter: true },
+      { key: 'rn_turnover', field: 'rn_turnover', higherIsBetter: false },
+      { key: 'deficiency_count', field: 'health_deficiencies', higherIsBetter: false }
     ];
 
     const percentiles = {};
@@ -1021,16 +1126,14 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
       };
     }
 
-    // Add occupancy percentile
-    const beds = parseFloat(facility.certified_beds) || 1;
-    const residents = parseFloat(facility.average_residents_per_day) || 0;
-    const occupancy = (residents / beds) * 100;
+    // Add occupancy percentile - use occupancy_rate directly instead of calculating
+    const occupancy = parseFloat(facility.occupancy_rate) || 0;
 
     const occupancyResult = await pool.query(`
       SELECT COUNT(*) as count FROM snf_facilities
       ${whereClause}
-      AND certified_beds > 0
-      AND (average_residents_per_day::float / certified_beds * 100) < $1
+      AND occupancy_rate IS NOT NULL
+      AND occupancy_rate::float < $1
     `, [occupancy, ...params.slice(1)]);
 
     percentiles.occupancy = {
@@ -1038,6 +1141,26 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
       percentile: facilityCount > 0 ? Math.round((parseInt(occupancyResult.rows[0].count) / facilityCount) * 100) : 0,
       better_than: parseInt(occupancyResult.rows[0].count)
     };
+
+    // Add RN turnover percentile - now snf_facilities has rn_turnover data after sync
+    const rnTurnover = parseFloat(facility.rn_turnover) || 0;
+    if (rnTurnover > 0) {
+      // Count facilities with HIGHER turnover (lower is better)
+      const rnTurnoverResult = await pool.query(`
+        SELECT COUNT(*) as count FROM snf_facilities
+        ${whereClause}
+        AND rn_turnover IS NOT NULL
+        AND rn_turnover::float > $1
+      `, [rnTurnover, ...params.slice(1)]);
+
+      // Use total facility count (not just those with data) for percentile calculation
+      // This matches SNFalyze's methodology
+      percentiles.rn_turnover = {
+        value: Math.round(rnTurnover * 100) / 100,
+        percentile: facilityCount > 0 ? Math.round((parseInt(rnTurnoverResult.rows[0].count) / facilityCount) * 100) : 0,
+        better_than: parseInt(rnTurnoverResult.rows[0].count)
+      };
+    }
 
     res.json({
       success: true,

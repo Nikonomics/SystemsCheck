@@ -8,6 +8,7 @@ import {
   LogOut,
   FileEdit,
   Activity,
+  Brain,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,6 +17,7 @@ const navigation = [
   { name: 'Scorecards', href: '/scorecards', icon: ClipboardCheck },
   { name: 'Facilities', href: '/facilities', icon: Building2 },
   { name: 'Survey Analytics', href: '/survey-analytics', icon: Activity },
+  { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain },
 ];
 
 const adminNavigation = [

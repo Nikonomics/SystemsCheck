@@ -16,7 +16,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm install && npm run db:add-ccns
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

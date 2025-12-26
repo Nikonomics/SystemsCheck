@@ -10,7 +10,8 @@
     "db:seed": "node src/seeds/seed.js",
     "db:seed:template": "node src/seeds/seedTemplate.js",
     "db:reset": "sequelize-cli db:drop && sequelize-cli db:create && npm run db:migrate && npm run db:seed",
-    "populate-ccns": "node src/scripts/populateCCNs.js"
+    "populate-ccns": "node src/scripts/populateCCNs.js",
+    "db:add-ccns": "node src/scripts/addCcns.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

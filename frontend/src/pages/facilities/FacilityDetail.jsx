@@ -268,27 +268,23 @@ export function FacilityDetail() {
           )}
         </div>
 
-        {/* New Scorecard button */}
-        {currentTab === 'scorecards' && (
-          <>
-            {!currentMonthScorecard && (
-              <Link to={`/facilities/${id}/scorecards/new`}>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Scorecard
-                </Button>
-              </Link>
-            )}
-            {currentMonthScorecard && currentMonthScorecard.status === 'draft' && (
-              <Link to={`/scorecards/${currentMonthScorecard.id}/edit`}>
-                <Button>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Continue Current Scorecard
-                </Button>
-              </Link>
-            )}
-          </>
-        )}
+        {/* New Scorecard button - always visible */}
+        <div className="flex gap-2">
+          {currentMonthScorecard && currentMonthScorecard.status === 'draft' && (
+            <Link to={`/scorecards/${currentMonthScorecard.id}/edit`}>
+              <Button variant="secondary">
+                <Pencil className="h-4 w-4 mr-2" />
+                Continue Current
+              </Button>
+            </Link>
+          )}
+          <Link to={`/facilities/${id}/scorecards/new`}>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Scorecard
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Tab Navigation */}

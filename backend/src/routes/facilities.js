@@ -173,6 +173,7 @@ router.get('/facilities', authenticateToken, async (req, res) => {
       city: f.city,
       state: f.state,
       zipCode: f.zipCode,
+      ccn: f.ccn,
       team: {
         id: f.team.id,
         name: f.team.name,

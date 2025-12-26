@@ -8,9 +8,13 @@ import {
   TrendingUp,
   Building2,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { facilitiesApi } from '../../api/facilities';
 import { OverviewTab } from './components/OverviewTab';
+import { HealthSurveysTab } from './components/HealthSurveysTab';
+import { FireSafetyTab } from './components/FireSafetyTab';
+import { DeficienciesTab } from './components/DeficienciesTab';
+import { QualityMeasuresTab } from './components/QualityMeasuresTab';
+import { BenchmarksTab } from './components/BenchmarksTab';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Activity },
@@ -94,15 +98,15 @@ export function SurveyAnalytics() {
       case 'overview':
         return <OverviewTab ccn={selectedFacility.ccn} facilityName={selectedFacility.name} />;
       case 'health-surveys':
-        return <PlaceholderTab title="Health Surveys" description="Survey history and deficiency details coming soon" />;
+        return <HealthSurveysTab ccn={selectedFacility.ccn} />;
       case 'fire-safety':
-        return <PlaceholderTab title="Fire Safety" description="Fire safety citations and K-tags coming soon" />;
+        return <FireSafetyTab ccn={selectedFacility.ccn} />;
       case 'deficiencies':
-        return <PlaceholderTab title="Deficiencies" description="Deficiency analysis by category and severity coming soon" />;
+        return <DeficienciesTab ccn={selectedFacility.ccn} />;
       case 'quality-measures':
-        return <PlaceholderTab title="Quality Measures" description="QM ratings and benchmarks coming soon" />;
+        return <QualityMeasuresTab ccn={selectedFacility.ccn} />;
       case 'benchmarks':
-        return <PlaceholderTab title="Benchmarks" description="State and national comparisons coming soon" />;
+        return <BenchmarksTab ccn={selectedFacility.ccn} />;
       default:
         return null;
     }
@@ -187,19 +191,6 @@ export function SurveyAnalytics() {
         {renderTabContent()}
       </div>
     </div>
-  );
-}
-
-function PlaceholderTab({ title, description }) {
-  return (
-    <Card>
-      <CardContent className="py-12">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
-          <p className="text-gray-500">{description}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

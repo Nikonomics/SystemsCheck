@@ -8,7 +8,7 @@
  * - Infection Control Surveys (focused IC)
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   Info,
@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Shield
 } from 'lucide-react';
+import { SurveyTimelineVisual } from './SurveyTimelineVisual';
 
 /**
  * Severity badge component
@@ -99,8 +100,8 @@ const SURVEY_TYPE_CONFIG = {
 /**
  * Individual survey type card
  */
-const SurveyTypeCard = ({ type, data, config }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const SurveyTypeCard = ({ type, data, config, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const Icon = config.icon;
 
   if (!data || data.surveyCount === 0) {
@@ -221,16 +222,21 @@ const SurveyTypeCard = ({ type, data, config }) => {
               <h5 className="text-sm font-medium text-gray-700 mb-2">Top Cited Tags</h5>
               <div className="space-y-2">
                 {data.topTags.map((tag, idx) => (
-                  <div key={tag.tag} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-medium text-gray-900">{tag.tag}</span>
-                      {tag.systemName && (
-                        <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
-                          {tag.systemName}
-                        </span>
+                  <div key={tag.tag} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg" title={tag.tagDescription}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+                        {tag.systemName && (
+                          <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded flex-shrink-0">
+                            {tag.systemName}
+                          </span>
+                        )}
+                      </div>
+                      {tag.tagName && tag.tagName !== 'Unknown Tag' && (
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{tag.tagName}</p>
                       )}
                     </div>
-                    <span className="text-sm text-gray-600">{tag.count}x</span>
+                    <span className="text-sm text-gray-600 flex-shrink-0 ml-2">{tag.count}x</span>
                   </div>
                 ))}
               </div>
@@ -328,18 +334,46 @@ export function SurveyTypeBreakdown({ data, loading, error }) {
 
   const { surveyTypes, summary } = data;
 
+  // Combine all surveys for the visual timeline
+  const allSurveys = useMemo(() => {
+    const surveys = [];
+    if (surveyTypes.standard?.surveys) {
+      surveyTypes.standard.surveys.forEach(s => surveys.push({ ...s, type: 'standard' }));
+    }
+    if (surveyTypes.complaint?.surveys) {
+      surveyTypes.complaint.surveys.forEach(s => surveys.push({ ...s, type: 'complaint' }));
+    }
+    if (surveyTypes.fireSafety?.surveys) {
+      surveyTypes.fireSafety.surveys.forEach(s => surveys.push({ ...s, type: 'fireSafety' }));
+    }
+    if (surveyTypes.infectionControl?.surveys) {
+      surveyTypes.infectionControl.surveys.forEach(s => surveys.push({ ...s, type: 'infectionControl' }));
+    }
+    return surveys.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [surveyTypes]);
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900">Survey Type Breakdown</h3>
         <p className="text-sm text-gray-500 mt-1">
+          Your surveys grouped by type. Standard = annual recertification. Complaint = investigation triggered by a complaint. Fire Safety = Life Safety Code. Each type has different implications.
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
           {summary.totalSurveys} surveys, {summary.totalDeficiencies} total deficiencies
         </p>
       </div>
 
+      {/* Visual Timeline */}
+      {allSurveys.length > 0 && (
+        <div className="px-6 pt-4">
+          <SurveyTimelineVisual surveys={allSurveys} />
+        </div>
+      )}
+
       {/* Cards Grid */}
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="p-6 pt-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SurveyTypeCard
           type="standard"
           data={surveyTypes.standard}

@@ -70,8 +70,8 @@ const YearMarker = ({ year }) => (
 /**
  * Single survey entry in timeline
  */
-const TimelineEntry = ({ survey, stateAvg, isFirst, isLast }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const TimelineEntry = ({ survey, stateAvg, isFirst, isLast, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   const surveyDate = new Date(survey.date);
   const month = surveyDate.toLocaleDateString('en-US', { month: 'short' });
@@ -332,6 +332,9 @@ export function SurveyTimeline({ data, loading, error }) {
               <h3 className="text-lg font-semibold text-gray-900">Survey Timeline</h3>
             </div>
             <p className="text-sm text-gray-500 mt-1">
+              Chronological view of your survey history with pattern detection. Highlights repeated tags and severity changes over time.
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
               {summary.totalSurveys} surveys over {summary.yearsSpanned} years
               {summary.ijSurveys > 0 && (
                 <span className="text-red-600 ml-2">

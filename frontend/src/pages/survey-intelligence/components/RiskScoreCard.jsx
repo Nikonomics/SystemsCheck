@@ -17,6 +17,7 @@ import {
   Calendar,
   Info
 } from 'lucide-react';
+import { RiskScoreTakeaway } from './SectionTakeaway';
 
 /**
  * Get color classes based on risk level
@@ -135,7 +136,14 @@ export function RiskScoreCard({ data, loading, error }) {
   return (
     <div className={`rounded-xl border-2 ${colors.border} ${colors.bg} overflow-hidden`}>
       {/* Header */}
-      <div className="p-6">
+      <div className="px-6 pt-4 pb-2">
+        <h3 className="text-lg font-semibold text-gray-900">Risk Score</h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Composite score based on survey history, severity trends, repeat citations, and state market alignment. Higher scores indicate greater regulatory risk.
+        </p>
+      </div>
+
+      <div className="p-6 pt-2">
         <div className="text-center">
           {/* Risk Score Circle */}
           <div className="relative inline-flex items-center justify-center mb-4">
@@ -258,6 +266,9 @@ export function RiskScoreCard({ data, loading, error }) {
                 {factors.internalAudits.message}
               </div>
             )}
+
+            {/* Takeaway */}
+            <RiskScoreTakeaway riskScore={riskScore} surveyTiming={surveyTiming} />
           </div>
         )}
       </div>

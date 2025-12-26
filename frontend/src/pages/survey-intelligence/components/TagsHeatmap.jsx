@@ -102,22 +102,25 @@ const TagRow = ({ tag, surveys, onCellClick }) => {
   return (
     <tr className="hover:bg-gray-50">
       {/* Tag info */}
-      <td className="sticky left-0 bg-white border-r border-gray-200 px-3 py-2 z-10">
-        <div className="flex items-center gap-2 min-w-[140px]">
+      <td className="sticky left-0 bg-white border-r border-gray-200 px-3 py-2 z-10" title={tag.tagDescription}>
+        <div className="flex items-center gap-2 min-w-[200px]">
           <span className={`p-1 rounded ${trendConfig.bg}`}>
             <TrendIcon className={`h-3 w-3 ${trendConfig.color}`} />
           </span>
           <div>
-            <span className="font-mono text-sm font-medium text-gray-900">{tag.tag}</span>
-            {tag.systemName && tag.systemName !== 'Other' && (
-              <p className="text-xs text-gray-500 truncate max-w-[120px]">{tag.systemName}</p>
+            <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+            {tag.tagName && tag.tagName !== 'Unknown Tag' && (
+              <p className="text-xs text-gray-500 truncate max-w-[180px]">{tag.tagName}</p>
+            )}
+            {(!tag.tagName || tag.tagName === 'Unknown Tag') && tag.systemName && tag.systemName !== 'Other' && (
+              <p className="text-xs text-gray-500 truncate max-w-[180px]">{tag.systemName}</p>
             )}
           </div>
         </div>
       </td>
 
       {/* Citation count */}
-      <td className="sticky left-[164px] bg-white border-r border-gray-200 px-2 py-2 text-center z-10">
+      <td className="sticky left-[224px] bg-white border-r border-gray-200 px-2 py-2 text-center z-10">
         <span className="text-sm text-gray-600">{tag.citationCount}</span>
       </td>
 
@@ -163,9 +166,9 @@ const CategoryHeader = ({ category, count, isExpanded, onToggle }) => {
 
 export function TagsHeatmap({ data, loading, error }) {
   const [expandedCategories, setExpandedCategories] = useState({
-    health: true,
-    life_safety: true,
-    emergency_prep: true
+    health: false,
+    life_safety: false,
+    emergency_prep: false
   });
   const [selectedCitation, setSelectedCitation] = useState(null);
   const [trendFilter, setTrendFilter] = useState('all');
@@ -251,8 +254,11 @@ export function TagsHeatmap({ data, loading, error }) {
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Deficiency Heatmap</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Tags Heatmap</h3>
             <p className="text-sm text-gray-500">
+              Visual history of every deficiency tag across all surveys. Color = severity level. Patterns reveal which issues keep returning.
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
               {summary.totalTags} tags across {surveys.length} surveys
             </p>
           </div>
@@ -304,10 +310,10 @@ export function TagsHeatmap({ data, loading, error }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-gray-50">
-              <th className="sticky left-0 bg-gray-50 border-r border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider z-20">
+              <th className="sticky left-0 bg-gray-50 border-r border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider z-20 min-w-[200px]">
                 Tag
               </th>
-              <th className="sticky left-[164px] bg-gray-50 border-r border-b border-gray-200 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider z-20">
+              <th className="sticky left-[224px] bg-gray-50 border-r border-b border-gray-200 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider z-20">
                 #
               </th>
               {surveys.map(survey => (

@@ -18,6 +18,7 @@ import {
   TrendingDown,
   Minus
 } from 'lucide-react';
+import { ClinicalSystemsTakeaway } from './SectionTakeaway';
 
 /**
  * Risk badge component
@@ -107,13 +108,14 @@ const FTagPills = ({ tags }) => {
 
   return (
     <div className="flex flex-wrap gap-1">
-      {tags.slice(0, 3).map(({ tag, count }) => (
+      {tags.slice(0, 3).map((tagData) => (
         <span
-          key={tag}
+          key={tagData.tag}
           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+          title={tagData.tagDescription || tagData.tagName}
         >
-          {tag}
-          {count > 1 && <span className="ml-1 text-gray-500">×{count}</span>}
+          {tagData.tagFormatted || tagData.tag}
+          {tagData.count > 1 && <span className="ml-1 text-gray-500">×{tagData.count}</span>}
         </span>
       ))}
       {tags.length > 3 && (
@@ -254,7 +256,7 @@ export function ClinicalSystemsBreakdown({ data, loading, error, onViewSystem })
               <h3 className="text-lg font-semibold text-gray-900">Clinical Systems Breakdown</h3>
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              F-tags mapped to internal audit systems • Threshold: {threshold}%
+              Maps CMS deficiency tags to SystemsCheck's 7 clinical audit systems. Shows where regulatory risk aligns with your internal audits. Gap shows your scorecard score vs the {threshold}% target.
             </p>
           </div>
           {scorecardDate && (
@@ -344,6 +346,9 @@ export function ClinicalSystemsBreakdown({ data, loading, error, onViewSystem })
             </div>
           )}
         </div>
+
+        {/* Takeaway */}
+        <ClinicalSystemsTakeaway systems={systems} summary={summary} />
       </div>
     </div>
   );

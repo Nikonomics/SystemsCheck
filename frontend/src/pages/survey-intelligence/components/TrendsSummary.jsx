@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Info
 } from 'lucide-react';
+import { TrendsTakeaway } from './SectionTakeaway';
 
 /**
  * Trend category card
@@ -49,8 +50,9 @@ const TrendCard = ({ trend, count, tags, color, icon: Icon, label, description, 
             <span
               key={tag.tag}
               className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/50"
+              title={tag.tagDescription || tag.tagName}
             >
-              {tag.tag}
+              {tag.tagFormatted || tag.tag} {tag.tagName && tag.tagName !== 'Unknown Tag' ? `- ${tag.tagName.substring(0, 25)}${tag.tagName.length > 25 ? '...' : ''}` : ''}
             </span>
           ))}
           {tags.length > 3 && (
@@ -69,16 +71,21 @@ const TrendCard = ({ trend, count, tags, color, icon: Icon, label, description, 
  */
 const TagRow = ({ tag }) => {
   return (
-    <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded">
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-sm font-medium text-gray-900">{tag.tag}</span>
-        {tag.systemName && (
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-            {tag.systemName}
-          </span>
+    <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded" title={tag.tagDescription}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+          {tag.systemName && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded flex-shrink-0">
+              {tag.systemName}
+            </span>
+          )}
+        </div>
+        {tag.tagName && tag.tagName !== 'Unknown Tag' && (
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{tag.tagName}</p>
         )}
       </div>
-      <div className="flex items-center gap-2 text-sm text-gray-500">
+      <div className="flex items-center gap-2 text-sm text-gray-500 flex-shrink-0 ml-2">
         <span>{tag.citationCount} citation{tag.citationCount !== 1 ? 's' : ''}</span>
         <ChevronRight className="h-4 w-4" />
       </div>
@@ -179,6 +186,9 @@ export function TrendsSummary({ data, loading, error }) {
       <div className="p-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900">Deficiency Trends</h3>
         <p className="text-sm text-gray-500 mt-1">
+          Tracks how your deficiency tags change across surveys. Worsening = higher severity over time. Persistent = same severity repeated. Use this to identify stubborn issues.
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
           {summary.totalSurveys} surveys, {summary.uniqueTags} unique tags
         </p>
       </div>
@@ -233,8 +243,9 @@ export function TrendsSummary({ data, loading, error }) {
                 <span
                   key={tag.tag}
                   className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                  title={tag.tagDescription || tag.tagName}
                 >
-                  {tag.tag}
+                  {tag.tagFormatted || tag.tag} {tag.tagName && tag.tagName !== 'Unknown Tag' ? `- ${tag.tagName.substring(0, 30)}${tag.tagName.length > 30 ? '...' : ''}` : ''}
                 </span>
               ))}
             </div>
@@ -257,6 +268,11 @@ export function TrendsSummary({ data, loading, error }) {
           </div>
         </div>
       )}
+
+      {/* Takeaway */}
+      <div className="px-4 pb-4">
+        <TrendsTakeaway tagTrends={tagTrends} summary={summary} />
+      </div>
     </div>
   );
 }

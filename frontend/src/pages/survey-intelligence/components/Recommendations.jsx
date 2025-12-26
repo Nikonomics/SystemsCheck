@@ -332,6 +332,9 @@ export function Recommendations({ riskData, trendsData, loading, error }) {
           <h3 className="text-lg font-semibold text-gray-900">Recommendations</h3>
         </div>
         <p className="text-sm text-gray-500 mt-1">
+          AI-generated priorities based on your survey history combined with current state trends. These connect what surveyors cited at your facility with what they're focusing on across your state.
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
           {totalCount} actionable items based on survey history and risk analysis
         </p>
       </div>

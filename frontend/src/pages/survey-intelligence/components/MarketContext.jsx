@@ -19,6 +19,7 @@ import {
   Sparkles,
   BarChart3
 } from 'lucide-react';
+import { MarketContextTakeaway } from './SectionTakeaway';
 
 /**
  * YoY change badge
@@ -95,17 +96,22 @@ const TagBar = ({ tag, maxCount }) => {
   const percentage = maxCount > 0 ? (tag.recentCount / maxCount) * 100 : 0;
 
   return (
-    <div className="py-2">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-medium text-gray-900">{tag.tag}</span>
-          {tag.systemName && tag.systemName !== 'Other' && (
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-              {tag.systemName}
-            </span>
+    <div className="py-3" title={tag.tagDescription}>
+      <div className="flex items-start justify-between mb-1">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-sm font-medium text-gray-900">{tag.tagFormatted || tag.tag}</span>
+            {tag.systemName && tag.systemName !== 'Other' && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                {tag.systemName}
+              </span>
+            )}
+          </div>
+          {tag.tagName && tag.tagName !== 'Unknown Tag' && (
+            <p className="text-xs text-gray-500 mt-0.5 truncate">{tag.tagName}</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0 ml-2">
           <span className="text-sm text-gray-600">{tag.recentCount} citations</span>
           <YoYBadge change={tag.yoyChange} />
         </div>
@@ -204,19 +210,29 @@ export function MarketContext({ data, loading, error }) {
     );
   }
 
-  const { stateStats, yourTrendingTags, emergingRisks, summary } = data;
+  const { stateStats, yourTrendingTags, emergingRisks, summary, dataPeriod } = data;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-purple-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Market Context</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-purple-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Market Context</h3>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              State-wide CMS survey trends for the last 6 months. Shows what surveyors are currently citing most frequently.
+            </p>
+          </div>
+          {dataPeriod && (
+            <div className="text-right text-sm text-gray-500">
+              <span className="font-medium">{dataPeriod.label}</span>
+              <p className="text-xs">{stateStats.facilitiesSurveyed} of {stateStats.totalFacilities} {stateStats.state} facilities surveyed</p>
+            </div>
+          )}
         </div>
-        <p className="text-sm text-gray-500 mt-1">
-          State-level trends and emerging risks compared to your facility history
-        </p>
       </div>
 
       {/* Content */}
@@ -247,31 +263,12 @@ export function MarketContext({ data, loading, error }) {
           />
         </div>
 
-        {/* Summary Alert */}
-        {summary.topTrendingTag && (
-          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-medium text-yellow-800">Key Insight</h4>
-                <p className="text-sm text-yellow-700 mt-1">
-                  {summary.topTrendingTag && (
-                    <>
-                      Your most at-risk tag <span className="font-mono font-medium">{summary.topTrendingTag}</span> is
-                      also trending statewide.
-                    </>
-                  )}
-                  {summary.topEmergingRisk && (
-                    <>
-                      {' '}Watch for <span className="font-mono font-medium">{summary.topEmergingRisk}</span> as an emerging
-                      focus area in upcoming surveys.
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Takeaway */}
+        <MarketContextTakeaway
+          yourTrendingTags={yourTrendingTags}
+          emergingRisks={emergingRisks}
+          stateStats={stateStats}
+        />
       </div>
     </div>
   );

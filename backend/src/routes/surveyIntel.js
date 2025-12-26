@@ -12,6 +12,7 @@ const router = express.Router();
 const { getMarketPool } = require('../config/marketDatabase');
 const { Facility, Team, Company, Scorecard, ScorecardSystem } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const { getTagDefinition, formatTag } = require('../utils/getTagDefinition');
 
 // ============================================================================
 // CONSTANTS
@@ -297,8 +298,19 @@ router.get('/facility/:facilityId/risk-score', authenticateToken, async (req, re
       LIMIT 10
     `, [facilityState]);
 
-    const hotTags = hotTagsResult.rows.map(r => r.deficiency_tag);
-    const matchingHotTags = uniqueTags.filter(tag => hotTags.includes(tag)).length;
+    const hotTags = hotTagsResult.rows.map(r => {
+      const def = getTagDefinition(r.deficiency_tag);
+      return {
+        tag: r.deficiency_tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        tagDescription: def.description,
+        category: def.category,
+        count: parseInt(r.count)
+      };
+    });
+    const hotTagIds = hotTags.map(t => t.tag);
+    const matchingHotTags = uniqueTags.filter(tag => hotTagIds.includes(tag)).length;
 
     // Calculate individual factor scores
     const recencyScore = calculateRecencyScore(monthsSinceLastSurvey);
@@ -374,7 +386,7 @@ router.get('/facility/:facilityId/risk-score', authenticateToken, async (req, re
           score: marketAlignmentScore,
           weight: 0.23,
           matchingHotTags,
-          hotTags: hotTags.slice(0, 5) // Top 5 for display
+          hotTags: hotTags.slice(0, 5) // Top 5 with names for display
         },
         internalAudits: {
           score: null,
@@ -512,8 +524,13 @@ router.get('/facility/:facilityId/trends', authenticateToken, async (req, res) =
       const trend = classifyTagTrend(citations);
       const isInLastSurvey = lastSurveyTags.includes(tag);
 
+      const def = getTagDefinition(tag);
       const tagInfo = {
         tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        tagDescription: def.description,
+        tagCategory: def.category,
         system: TAG_TO_SYSTEM[tag] || null,
         systemName: TAG_TO_SYSTEM[tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[tag]] : 'Other',
         citations: citations.map(c => ({
@@ -707,8 +724,13 @@ router.get('/facility/:facilityId/heatmap', authenticateToken, async (req, res) 
     // Process health deficiencies
     healthResult.rows.forEach(d => {
       if (!tagMap.has(d.deficiency_tag)) {
+        const def = getTagDefinition(d.deficiency_tag);
         tagMap.set(d.deficiency_tag, {
           tag: d.deficiency_tag,
+          tagFormatted: def.tag,
+          tagName: def.name,
+          tagDescription: def.description,
+          tagCategory: def.category,
           category: 'health',
           system: TAG_TO_SYSTEM[d.deficiency_tag] || null,
           systemName: TAG_TO_SYSTEM[d.deficiency_tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[d.deficiency_tag]] : 'Other',
@@ -725,8 +747,13 @@ router.get('/facility/:facilityId/heatmap', authenticateToken, async (req, res) 
     // Process fire safety deficiencies
     fireResult.rows.forEach(d => {
       if (!tagMap.has(d.deficiency_tag)) {
+        const def = getTagDefinition(d.deficiency_tag);
         tagMap.set(d.deficiency_tag, {
           tag: d.deficiency_tag,
+          tagFormatted: def.tag,
+          tagName: def.name,
+          tagDescription: def.description,
+          tagCategory: def.category,
           category: d.deficiency_prefix === 'K' ? 'life_safety' : 'emergency_prep',
           system: null,
           systemName: d.deficiency_prefix === 'K' ? 'Life Safety Code' : 'Emergency Preparedness',
@@ -955,8 +982,12 @@ router.get('/facility/:facilityId/by-survey-type', authenticateToken, async (req
       }
 
       const survey = surveyMap.get(dateKey);
+      const tagDef = getTagDefinition(d.deficiency_tag);
       survey.deficiencies.push({
         tag: d.deficiency_tag,
+        tagFormatted: tagDef.tag,
+        tagName: tagDef.name,
+        tagDescription: tagDef.description,
         severity: getSeverityLevel(d.scope_severity),
         text: d.deficiency_text?.substring(0, 150),
         system: TAG_TO_SYSTEM[d.deficiency_tag] || null,
@@ -991,8 +1022,12 @@ router.get('/facility/:facilityId/by-survey-type', authenticateToken, async (req
       const survey = fireSafetySurveys.get(dateKey);
       const isLifeSafety = d.deficiency_prefix === 'K';
 
+      const fireDef = getTagDefinition(d.deficiency_tag);
       survey.deficiencies.push({
         tag: d.deficiency_tag,
+        tagFormatted: fireDef.tag,
+        tagName: fireDef.name,
+        tagDescription: fireDef.description,
         severity: getSeverityLevel(d.scope_severity),
         text: d.deficiency_text?.substring(0, 150),
         category: isLifeSafety ? 'life_safety' : 'emergency_prep',
@@ -1028,12 +1063,18 @@ router.get('/facility/:facilityId/by-survey-type', authenticateToken, async (req
       const topTags = Object.entries(tagCounts)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([tag, count]) => ({
-          tag,
-          count,
-          system: TAG_TO_SYSTEM[tag] || null,
-          systemName: TAG_TO_SYSTEM[tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[tag]] : 'Other'
-        }));
+        .map(([tag, count]) => {
+          const def = getTagDefinition(tag);
+          return {
+            tag,
+            tagFormatted: def.tag,
+            tagName: def.name,
+            tagDescription: def.description,
+            count,
+            system: TAG_TO_SYSTEM[tag] || null,
+            systemName: TAG_TO_SYSTEM[tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[tag]] : 'Other'
+          };
+        });
 
       return {
         category: categoryName,
@@ -1221,8 +1262,12 @@ router.get('/facility/:facilityId/timeline', authenticateToken, async (req, res)
       const isRepeat = priorCitations.length > 0;
       const previousSeverity = isRepeat ? priorCitations[priorCitations.length - 1].severity : null;
 
+      const timelineDef = getTagDefinition(d.deficiency_tag);
       survey.deficiencies.push({
         tag: d.deficiency_tag,
+        tagFormatted: timelineDef.tag,
+        tagName: timelineDef.name,
+        tagDescription: timelineDef.description,
         severity,
         text: d.deficiency_text?.substring(0, 200),
         system: TAG_TO_SYSTEM[d.deficiency_tag] || null,
@@ -1325,14 +1370,18 @@ router.get('/facility/:facilityId/timeline', authenticateToken, async (req, res)
           pattern = 'repeat';
         }
 
+        const patternDef = getTagDefinition(tag);
         patterns.push({
           tag,
+          tagFormatted: patternDef.tag,
+          tagName: patternDef.name,
+          tagDescription: patternDef.description,
           system: TAG_TO_SYSTEM[tag] || null,
           systemName: TAG_TO_SYSTEM[tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[tag]] : 'Other',
           citationCount: citations.length,
           severityProgression: severities.join(' → '),
           pattern,
-          narrative: generatePatternNarrative(tag, citations, pattern)
+          narrative: generatePatternNarrative(tag, patternDef.name, citations, pattern)
         });
       }
     });
@@ -1539,10 +1588,16 @@ router.get('/facility/:facilityId/system-risk', authenticateToken, async (req, r
         cmsRisk: system.riskLevel,
         maxSeverity: system.maxSeverity,
         totalCitations: system.totalCitations,
-        fTags: system.fTags.slice(0, 5).map(tag => ({
-          tag,
-          count: system.tagCounts[tag]
-        })),
+        fTags: system.fTags.slice(0, 5).map(tag => {
+          const def = getTagDefinition(tag);
+          return {
+            tag,
+            tagFormatted: def.tag,
+            tagName: def.name,
+            tagDescription: def.description,
+            count: system.tagCounts[tag]
+          };
+        }),
         scorecardScore: system.scorecardScore,
         gap: system.gap,
         gapStatus: system.gap === null ? null :
@@ -1568,10 +1623,16 @@ router.get('/facility/:facilityId/system-risk', authenticateToken, async (req, r
       systems,
       otherTags: systemRisk['other'].totalCitations > 0 ? {
         totalCitations: systemRisk['other'].totalCitations,
-        fTags: systemRisk['other'].fTags.slice(0, 5).map(tag => ({
-          tag,
-          count: systemRisk['other'].tagCounts[tag]
-        }))
+        fTags: systemRisk['other'].fTags.slice(0, 5).map(tag => {
+          const def = getTagDefinition(tag);
+          return {
+            tag,
+            tagFormatted: def.tag,
+            tagName: def.name,
+            tagDescription: def.description,
+            count: systemRisk['other'].tagCounts[tag]
+          };
+        })
       } : null,
       threshold: THRESHOLD,
       scorecardDate: latestScorecard?.createdAt || null,
@@ -1692,8 +1753,13 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
     const emergingRisks = [];
 
     stateTrendsResult.rows.forEach(row => {
+      const def = getTagDefinition(row.tag);
       const tagData = {
         tag: row.tag,
+        tagFormatted: def.tag,
+        tagName: def.name,
+        tagDescription: def.description,
+        tagCategory: def.category,
         system: TAG_TO_SYSTEM[row.tag] || null,
         systemName: TAG_TO_SYSTEM[row.tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[row.tag]] : 'Other',
         recentCount: parseInt(row.recent_count),
@@ -1715,6 +1781,18 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
     // Sort: trending by YoY change (highest increase first), emerging by recent count
     yourTrendingTags.sort((a, b) => b.yoyChange - a.yoyChange);
     emergingRisks.sort((a, b) => b.yoyChange - a.yoyChange);
+
+    // Calculate date period
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const dataPeriod = {
+      startDate: sixMonthsAgo.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
+      months: 6,
+      label: `${sixMonthsAgo.toLocaleDateString('en-US', { month: 'short' })} - ${now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+    };
 
     // Get state-level summary stats
     const stateStatsResult = await pool.query(`
@@ -1750,6 +1828,19 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
     const priorAvg = parseFloat(stateStats.prior_avg) || 0;
     const stateYoyChange = priorAvg > 0 ? Math.round(((recentAvg - priorAvg) / priorAvg) * 100) : 0;
 
+    // Get count of facilities surveyed in the period
+    const facilitiesSurveyedResult = await pool.query(`
+      SELECT COUNT(DISTINCT d.federal_provider_number) as surveyed_count,
+             COUNT(*) as total_surveys
+      FROM cms_facility_deficiencies d
+      JOIN snf_facilities f ON d.federal_provider_number = f.federal_provider_number
+      WHERE f.state = $1
+        AND d.survey_date >= NOW() - INTERVAL '6 months'
+    `, [facilityState]);
+
+    const facilitiesSurveyed = parseInt(facilitiesSurveyedResult.rows[0]?.surveyed_count) || 0;
+    const totalSurveys = parseInt(facilitiesSurveyedResult.rows[0]?.total_surveys) || 0;
+
     res.json({
       success: true,
       hasData: stateTrendsResult.rows.length > 0,
@@ -1759,9 +1850,12 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
         ccn: facility.ccn,
         state: facilityState
       },
+      dataPeriod,
       stateStats: {
         state: facilityState,
         totalFacilities: parseInt(stateStats.total_facilities) || 0,
+        facilitiesSurveyed,
+        totalSurveys,
         recentAvgDeficiencies: Math.round(recentAvg * 10) / 10,
         priorAvgDeficiencies: Math.round(priorAvg * 10) / 10,
         yoyChange: stateYoyChange,
@@ -1786,15 +1880,14 @@ router.get('/facility/:facilityId/market-context', authenticateToken, async (req
 /**
  * Helper: Generate narrative for tag pattern
  */
-function generatePatternNarrative(tag, citations, pattern) {
+function generatePatternNarrative(tag, tagName, citations, pattern) {
   const severities = citations.map(c => c.severity);
   const count = citations.length;
   const systemName = TAG_TO_SYSTEM[tag] ? SYSTEM_NAMES[TAG_TO_SYSTEM[tag]] : null;
 
-  let narrative = `${tag}`;
-  if (systemName) {
-    narrative += ` (${systemName})`;
-  }
+  // Use tag name for more readable narrative
+  const displayName = tagName && tagName !== 'Unknown Tag' ? `${tag} (${tagName})` : tag;
+  let narrative = displayName;
 
   if (pattern === 'increasing') {
     narrative += ` has been cited in ${count} consecutive surveys with increasing severity (${severities.join(' → ')})`;

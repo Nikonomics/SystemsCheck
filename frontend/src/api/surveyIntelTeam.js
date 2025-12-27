@@ -79,6 +79,17 @@ const surveyIntelTeamApi = {
   getTeams: async () => {
     const response = await client.get(`${API_BASE}/teams`);
     return response.data;
+  },
+
+  /**
+   * Get risk trend data for ALL teams (overview chart)
+   * @param {number} months - 3, 6, or 12 (default 12)
+   */
+  getAllTeamsRiskTrend: async (months = 12) => {
+    const response = await client.get(`${API_BASE}/teams/risk-trend`, {
+      params: { months }
+    });
+    return response.data;
   }
 };
 

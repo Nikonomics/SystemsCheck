@@ -9,9 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import {
   Users,
-  Building2,
   AlertTriangle,
-  TrendingUp,
   ChevronRight,
   RefreshCw,
   ExternalLink,
@@ -31,6 +29,8 @@ import TeamMarketComparison from './components/team/TeamMarketComparison';
 import ScorecardTrends from './components/team/ScorecardTrends';
 import TeamRecommendations from './components/team/TeamRecommendations';
 import TeamRiskTrendChart from './components/team/TeamRiskTrendChart';
+import AllTeamsRiskTrendChart from './components/team/AllTeamsRiskTrendChart';
+import TeamSelectorCards from './components/team/TeamSelectorCards';
 
 const TeamIntelligence = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -56,6 +56,11 @@ const TeamIntelligence = () => {
   const [availableTeams, setAvailableTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
 
+  // All teams overview state (for landing page)
+  const [allTeamsRiskTrend, setAllTeamsRiskTrend] = useState(null);
+  const [allTeamsLoading, setAllTeamsLoading] = useState(false);
+  const [trendMonths, setTrendMonths] = useState(12);
+
   // Fetch available teams (for selector and team switcher)
   useEffect(() => {
     const fetchTeams = async () => {
@@ -71,6 +76,24 @@ const TeamIntelligence = () => {
     };
     fetchTeams();
   }, []);
+
+  // Fetch all teams risk trend for landing page
+  useEffect(() => {
+    if (teamId) return; // Only fetch when no team is selected
+
+    const fetchAllTeamsRiskTrend = async () => {
+      setAllTeamsLoading(true);
+      try {
+        const response = await surveyIntelApi.getAllTeamsRiskTrend(trendMonths);
+        setAllTeamsRiskTrend(response);
+      } catch (err) {
+        console.error('Error fetching all teams risk trend:', err);
+      } finally {
+        setAllTeamsLoading(false);
+      }
+    };
+    fetchAllTeamsRiskTrend();
+  }, [teamId, trendMonths]);
 
   // Fetch all data
   useEffect(() => {
@@ -138,66 +161,48 @@ const TeamIntelligence = () => {
 
   if (!teamId) {
     return (
-      <div className="p-6">
-        <div className="max-w-lg mx-auto">
-          <div className="bg-white border border-gray-200 rounded-lg p-8 shadow-sm">
-            <div className="text-center mb-6">
-              <Users className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Team Intelligence</h2>
-              <p className="text-gray-600">
-                Select a team to view aggregated risk analysis, scorecard trends, and recommendations.
-              </p>
+      <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+              <Link to="/survey-intelligence" className="hover:text-blue-600">
+                Survey Intelligence
+              </Link>
+              <ChevronRight className="w-4 h-4" />
+              <span>Team View</span>
             </div>
-
-            {teamsLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <RefreshCw className="w-5 h-5 text-blue-500 animate-spin mr-2" />
-                <span className="text-gray-600">Loading teams...</span>
-              </div>
-            ) : availableTeams.length > 0 ? (
-              <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select a Team
-                </label>
-                <div className="relative">
-                  <select
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    onChange={(e) => handleTeamSelect(e.target.value)}
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Choose a team...</option>
-                    {availableTeams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name} ({team.facilityCount} facilities)
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-gray-500">No teams available.</p>
-                <Link
-                  to="/admin/organization"
-                  className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block"
-                >
-                  Create a team →
-                </Link>
-              </div>
-            )}
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-sm text-gray-500 text-center">
-                Or view individual facility intelligence on the{' '}
-                <Link to="/survey-intelligence" className="text-blue-600 hover:text-blue-700">
-                  Survey Intelligence
-                </Link>{' '}
-                page.
-              </p>
+            <div className="flex items-center gap-3">
+              <Users className="w-7 h-7 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900">Team Intelligence</h1>
             </div>
+            <p className="text-gray-600 mt-1">
+              Compare risk scores across all teams and view detailed analysis
+            </p>
           </div>
+
+          <Link
+            to="/survey-intelligence"
+            className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Facility View
+          </Link>
         </div>
+
+        {/* All Teams Risk Trend Chart */}
+        <AllTeamsRiskTrendChart
+          data={allTeamsRiskTrend}
+          months={trendMonths}
+          onMonthsChange={setTrendMonths}
+          loading={allTeamsLoading}
+        />
+
+        {/* Team Selector Cards */}
+        <TeamSelectorCards
+          teams={allTeamsRiskTrend?.teams}
+          loading={allTeamsLoading}
+        />
       </div>
     );
   }

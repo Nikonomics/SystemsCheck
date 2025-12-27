@@ -1140,4 +1140,144 @@ router.get('/teams', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/survey-intel/teams/risk-trend
+ * Get risk trend data for ALL teams (for the overview chart)
+ * Query params:
+ *   - months: 3, 6, or 12 (default 12)
+ */
+router.get('/teams/risk-trend', async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 12;
+    const validMonths = [3, 6, 12];
+    const numMonths = validMonths.includes(months) ? months : 12;
+
+    // Get all teams with facilities
+    const teams = await Team.findAll({
+      attributes: ['id', 'name'],
+      order: [['name', 'ASC']],
+      include: [{
+        model: Facility,
+        as: 'facilities',
+        attributes: ['id', 'ccn']
+      }]
+    });
+
+    if (teams.length === 0) {
+      return res.json({ teams: [] });
+    }
+
+    // Collect all CCNs across all teams
+    const allCcns = [];
+    teams.forEach(team => {
+      team.facilities.forEach(f => {
+        if (f.ccn && !allCcns.includes(f.ccn)) {
+          allCcns.push(f.ccn);
+        }
+      });
+    });
+
+    if (allCcns.length === 0) {
+      // No facilities with CCNs, return empty trends
+      const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
+      return res.json({
+        teams: teams.map((team, idx) => ({
+          teamId: team.id,
+          teamName: team.name,
+          color: colors[idx % colors.length],
+          facilityCount: team.facilities.length,
+          currentRiskScore: 0,
+          riskLevel: 'LOW',
+          data: []
+        }))
+      });
+    }
+
+    // Fetch all deficiencies for all CCNs at once
+    const pool = getExternalPool();
+    const fourYearsAgo = new Date();
+    fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
+
+    const { rows: allDeficiencies } = await pool.query(`
+      SELECT
+        federal_provider_number,
+        deficiency_tag,
+        scope_severity,
+        survey_date
+      FROM cms_facility_deficiencies d
+      WHERE d.federal_provider_number = ANY($1)
+        AND d.survey_date >= $2
+      ORDER BY d.survey_date DESC
+    `, [allCcns, fourYearsAgo.toISOString()]);
+
+    // Color palette for teams
+    const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
+
+    // Calculate trend for each team
+    const teamsData = teams.map((team, teamIndex) => {
+      const teamCcns = team.facilities.filter(f => f.ccn).map(f => f.ccn);
+      const teamDeficiencies = allDeficiencies.filter(d => teamCcns.includes(d.federal_provider_number));
+
+      const trend = [];
+      const now = new Date();
+
+      for (let i = numMonths - 1; i >= 0; i--) {
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        const threeYearsBefore = new Date(monthEnd);
+        threeYearsBefore.setFullYear(threeYearsBefore.getFullYear() - 3);
+
+        // Filter deficiencies visible at this point in time
+        const relevantDefs = teamDeficiencies.filter(d => {
+          const surveyDate = new Date(d.survey_date);
+          return surveyDate <= monthEnd && surveyDate >= threeYearsBefore;
+        });
+
+        // Calculate risk per facility
+        const facilityRisks = [];
+        for (const ccn of teamCcns) {
+          const facilityDefs = relevantDefs.filter(d => d.federal_provider_number === ccn);
+          const lastSurvey = facilityDefs[0]?.survey_date;
+          const daysSince = lastSurvey
+            ? Math.floor((monthEnd - new Date(lastSurvey)) / (1000 * 60 * 60 * 24))
+            : 999;
+
+          const risk = calculateRiskScore(facilityDefs, daysSince);
+          facilityRisks.push(risk.score);
+        }
+
+        // Team average
+        const avgRisk = facilityRisks.length > 0
+          ? Math.round(facilityRisks.reduce((sum, s) => sum + s, 0) / facilityRisks.length)
+          : 0;
+
+        trend.push({
+          month: monthEnd.toISOString().slice(0, 7),
+          monthLabel: monthEnd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          riskScore: avgRisk
+        });
+      }
+
+      // Current risk score is the last data point
+      const currentRiskScore = trend.length > 0 ? trend[trend.length - 1].riskScore : 0;
+      const riskLevel = currentRiskScore > 70 ? 'HIGH' : currentRiskScore > 40 ? 'MODERATE' : 'LOW';
+
+      return {
+        teamId: team.id,
+        teamName: team.name,
+        color: colors[teamIndex % colors.length],
+        facilityCount: team.facilities.length,
+        currentRiskScore,
+        riskLevel,
+        data: trend
+      };
+    });
+
+    res.json({ teams: teamsData });
+
+  } catch (error) {
+    console.error('Error fetching all teams risk trend:', error);
+    res.status(500).json({ error: 'Failed to fetch teams risk trend' });
+  }
+});
+
 module.exports = router;

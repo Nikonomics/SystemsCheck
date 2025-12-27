@@ -18,30 +18,46 @@ const AnalyticsContext = createContext(null);
 
 // Check if PostHog is configured
 const isPostHogConfigured = () => {
-  return import.meta.env.VITE_POSTHOG_KEY && import.meta.env.VITE_POSTHOG_HOST;
+  const key = import.meta.env.VITE_POSTHOG_KEY;
+  const host = import.meta.env.VITE_POSTHOG_HOST;
+  console.log('[Analytics] Config check:', {
+    hasKey: !!key,
+    keyPrefix: key?.substring(0, 10),
+    host
+  });
+  return key && host;
 };
 
 // Initialize PostHog
 const initPostHog = () => {
   if (!isPostHogConfigured()) {
-    console.log('PostHog not configured - analytics disabled');
+    console.log('[Analytics] PostHog not configured - analytics disabled');
     return false;
   }
 
-  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
-    api_host: import.meta.env.VITE_POSTHOG_HOST,
+  const key = import.meta.env.VITE_POSTHOG_KEY;
+  const host = import.meta.env.VITE_POSTHOG_HOST;
+  const isDev = import.meta.env.DEV;
+  const debugEnabled = import.meta.env.VITE_POSTHOG_DEBUG === 'true';
+
+  console.log('[Analytics] Initializing PostHog:', { isDev, debugEnabled });
+
+  posthog.init(key, {
+    api_host: host,
     // Capture page views automatically
     capture_pageview: false, // We'll handle this manually for more control
     // Capture page leaves
     capture_pageleave: true,
-    // Disable in development unless explicitly enabled
-    loaded: (posthog) => {
-      if (import.meta.env.DEV && !import.meta.env.VITE_POSTHOG_DEBUG) {
-        posthog.opt_out_capturing();
+    // Only disable in dev if debug is not enabled
+    loaded: (ph) => {
+      console.log('[Analytics] PostHog loaded, opted in:', !ph.has_opted_out_capturing());
+      if (isDev && !debugEnabled) {
+        console.log('[Analytics] Development mode - opting out of capturing');
+        ph.opt_out_capturing();
       }
     },
-    // Session recording (optional - can be enabled in PostHog dashboard)
-    disable_session_recording: import.meta.env.DEV,
+    // Session recording
+    disable_session_recording: isDev && !debugEnabled,
     // Autocapture settings
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
@@ -50,6 +66,7 @@ const initPostHog = () => {
     },
   });
 
+  console.log('[Analytics] PostHog initialized successfully');
   return true;
 };
 

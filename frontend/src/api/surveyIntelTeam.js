@@ -83,10 +83,21 @@ const surveyIntelTeamApi = {
 
   /**
    * Get risk trend data for ALL teams (overview chart)
-   * @param {number} months - 3, 6, or 12 (default 12)
+   * @param {number} months - 3, 6, 12, 24, or 36 (default 12)
    */
   getAllTeamsRiskTrend: async (months = 12) => {
     const response = await client.get(`${API_BASE}/teams/risk-trend`, {
+      params: { months }
+    });
+    return response.data;
+  },
+
+  /**
+   * Get risk trend data for ALL facilities (facility-level overview chart)
+   * @param {number} months - 3, 6, 12, 24, or 36 (default 12)
+   */
+  getAllFacilitiesRiskTrend: async (months = 12) => {
+    const response = await client.get(`${API_BASE}/facilities/risk-trend`, {
       params: { months }
     });
     return response.data;

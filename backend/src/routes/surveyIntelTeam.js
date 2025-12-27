@@ -1144,12 +1144,12 @@ router.get('/teams', async (req, res) => {
  * GET /api/survey-intel/teams/risk-trend
  * Get risk trend data for ALL teams (for the overview chart)
  * Query params:
- *   - months: 3, 6, or 12 (default 12)
+ *   - months: 3, 6, 12, 24, or 36 (default 12)
  */
 router.get('/teams/risk-trend', async (req, res) => {
   try {
     const months = parseInt(req.query.months) || 12;
-    const validMonths = [3, 6, 12];
+    const validMonths = [3, 6, 12, 24, 36];
     const numMonths = validMonths.includes(months) ? months : 12;
 
     // Get all teams with facilities
@@ -1194,9 +1194,10 @@ router.get('/teams/risk-trend', async (req, res) => {
     }
 
     // Fetch all deficiencies for all CCNs at once
+    // Need 6 years of data to support 3 year trends + 3 year lookback for risk calculation
     const pool = getExternalPool();
-    const fourYearsAgo = new Date();
-    fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
+    const sixYearsAgo = new Date();
+    sixYearsAgo.setFullYear(sixYearsAgo.getFullYear() - 6);
 
     const { rows: allDeficiencies } = await pool.query(`
       SELECT
@@ -1208,7 +1209,7 @@ router.get('/teams/risk-trend', async (req, res) => {
       WHERE d.federal_provider_number = ANY($1)
         AND d.survey_date >= $2
       ORDER BY d.survey_date DESC
-    `, [allCcns, fourYearsAgo.toISOString()]);
+    `, [allCcns, sixYearsAgo.toISOString()]);
 
     // Color palette for teams
     const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
@@ -1277,6 +1278,136 @@ router.get('/teams/risk-trend', async (req, res) => {
   } catch (error) {
     console.error('Error fetching all teams risk trend:', error);
     res.status(500).json({ error: 'Failed to fetch teams risk trend' });
+  }
+});
+
+/**
+ * GET /api/survey-intel/facilities/risk-trend
+ * Get risk trend data for ALL facilities (for the facility-level overview chart)
+ * Query params:
+ *   - months: 3, 6, 12, 24, or 36 (default 12)
+ */
+router.get('/facilities/risk-trend', async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 12;
+    const validMonths = [3, 6, 12, 24, 36];
+    const numMonths = validMonths.includes(months) ? months : 12;
+
+    // Get all facilities with CCNs, grouped by team
+    const teams = await Team.findAll({
+      attributes: ['id', 'name'],
+      order: [['name', 'ASC']],
+      include: [{
+        model: Facility,
+        as: 'facilities',
+        attributes: ['id', 'name', 'ccn'],
+        where: { ccn: { [Op.ne]: null } },
+        required: false
+      }]
+    });
+
+    // Flatten facilities and collect CCNs
+    const allFacilities = [];
+    const allCcns = [];
+
+    teams.forEach(team => {
+      team.facilities?.forEach(f => {
+        if (f.ccn) {
+          allFacilities.push({
+            id: f.id,
+            name: f.name,
+            ccn: f.ccn,
+            teamId: team.id,
+            teamName: team.name
+          });
+          if (!allCcns.includes(f.ccn)) {
+            allCcns.push(f.ccn);
+          }
+        }
+      });
+    });
+
+    if (allCcns.length === 0) {
+      return res.json({ facilities: [] });
+    }
+
+    // Fetch all deficiencies
+    const pool = getExternalPool();
+    const sixYearsAgo = new Date();
+    sixYearsAgo.setFullYear(sixYearsAgo.getFullYear() - 6);
+
+    const { rows: allDeficiencies } = await pool.query(`
+      SELECT
+        federal_provider_number,
+        deficiency_tag,
+        scope_severity,
+        survey_date
+      FROM cms_facility_deficiencies d
+      WHERE d.federal_provider_number = ANY($1)
+        AND d.survey_date >= $2
+      ORDER BY d.survey_date DESC
+    `, [allCcns, sixYearsAgo.toISOString()]);
+
+    // Extended color palette for facilities
+    const colors = [
+      '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6',
+      '#a855f7', '#0ea5e9', '#22c55e', '#eab308', '#f97316', '#d946ef', '#6d28d9', '#0d9488',
+      '#c084fc', '#38bdf8', '#4ade80', '#facc15', '#fb923c', '#f472b6', '#818cf8', '#2dd4bf'
+    ];
+
+    // Calculate trend for each facility
+    const facilitiesData = allFacilities.map((facility, index) => {
+      const facilityDefs = allDeficiencies.filter(d => d.federal_provider_number === facility.ccn);
+
+      const trend = [];
+      const now = new Date();
+
+      for (let i = numMonths - 1; i >= 0; i--) {
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        const threeYearsBefore = new Date(monthEnd);
+        threeYearsBefore.setFullYear(threeYearsBefore.getFullYear() - 3);
+
+        // Filter deficiencies visible at this point in time
+        const relevantDefs = facilityDefs.filter(d => {
+          const surveyDate = new Date(d.survey_date);
+          return surveyDate <= monthEnd && surveyDate >= threeYearsBefore;
+        });
+
+        const lastSurvey = relevantDefs[0]?.survey_date;
+        const daysSince = lastSurvey
+          ? Math.floor((monthEnd - new Date(lastSurvey)) / (1000 * 60 * 60 * 24))
+          : 999;
+
+        const risk = calculateRiskScore(relevantDefs, daysSince);
+
+        trend.push({
+          month: monthEnd.toISOString().slice(0, 7),
+          monthLabel: monthEnd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          riskScore: risk.score
+        });
+      }
+
+      const currentRiskScore = trend.length > 0 ? trend[trend.length - 1].riskScore : 0;
+      const riskLevel = currentRiskScore > 70 ? 'HIGH' : currentRiskScore > 40 ? 'MODERATE' : 'LOW';
+
+      return {
+        facilityId: facility.id,
+        facilityName: facility.name,
+        ccn: facility.ccn,
+        teamId: facility.teamId,
+        teamName: facility.teamName,
+        color: colors[index % colors.length],
+        currentRiskScore,
+        riskLevel,
+        data: trend
+      };
+    });
+
+    res.json({ facilities: facilitiesData });
+
+  } catch (error) {
+    console.error('Error fetching all facilities risk trend:', error);
+    res.status(500).json({ error: 'Failed to fetch facilities risk trend' });
   }
 });
 

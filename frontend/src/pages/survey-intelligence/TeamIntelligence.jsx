@@ -58,8 +58,11 @@ const TeamIntelligence = () => {
 
   // All teams overview state (for landing page)
   const [allTeamsRiskTrend, setAllTeamsRiskTrend] = useState(null);
+  const [allFacilitiesRiskTrend, setAllFacilitiesRiskTrend] = useState(null);
   const [allTeamsLoading, setAllTeamsLoading] = useState(false);
+  const [allFacilitiesLoading, setAllFacilitiesLoading] = useState(false);
   const [trendMonths, setTrendMonths] = useState(12);
+  const [trendViewMode, setTrendViewMode] = useState('teams'); // 'teams' or 'facilities'
 
   // Fetch available teams (for selector and team switcher)
   useEffect(() => {
@@ -94,6 +97,25 @@ const TeamIntelligence = () => {
     };
     fetchAllTeamsRiskTrend();
   }, [teamId, trendMonths]);
+
+  // Fetch all facilities risk trend for landing page (when in facilities view)
+  useEffect(() => {
+    if (teamId) return; // Only fetch when no team is selected
+    if (trendViewMode !== 'facilities') return; // Only fetch when in facilities view
+
+    const fetchAllFacilitiesRiskTrend = async () => {
+      setAllFacilitiesLoading(true);
+      try {
+        const response = await surveyIntelApi.getAllFacilitiesRiskTrend(trendMonths);
+        setAllFacilitiesRiskTrend(response);
+      } catch (err) {
+        console.error('Error fetching all facilities risk trend:', err);
+      } finally {
+        setAllFacilitiesLoading(false);
+      }
+    };
+    fetchAllFacilitiesRiskTrend();
+  }, [teamId, trendMonths, trendViewMode]);
 
   // Fetch all data
   useEffect(() => {
@@ -190,12 +212,15 @@ const TeamIntelligence = () => {
           </Link>
         </div>
 
-        {/* All Teams Risk Trend Chart */}
+        {/* All Teams/Facilities Risk Trend Chart */}
         <AllTeamsRiskTrendChart
-          data={allTeamsRiskTrend}
+          teamsData={allTeamsRiskTrend}
+          facilitiesData={allFacilitiesRiskTrend}
           months={trendMonths}
           onMonthsChange={setTrendMonths}
-          loading={allTeamsLoading}
+          viewMode={trendViewMode}
+          onViewModeChange={setTrendViewMode}
+          loading={trendViewMode === 'teams' ? allTeamsLoading : allFacilitiesLoading}
         />
 
         {/* Team Selector Cards */}

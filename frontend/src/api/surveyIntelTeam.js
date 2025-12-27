@@ -63,6 +63,22 @@ const surveyIntelTeamApi = {
   getRecommendations: async (teamId) => {
     const response = await client.get(`${API_BASE}/team/${teamId}/recommendations`);
     return response.data;
+  },
+
+  /**
+   * Get historical team risk score trend (last 12 months)
+   */
+  getRiskTrend: async (teamId) => {
+    const response = await client.get(`${API_BASE}/team/${teamId}/risk-trend`);
+    return response.data;
+  },
+
+  /**
+   * Get all teams for team selector dropdown
+   */
+  getTeams: async () => {
+    const response = await client.get(`${API_BASE}/teams`);
+    return response.data;
   }
 };
 

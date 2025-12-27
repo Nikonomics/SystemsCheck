@@ -30,6 +30,7 @@ import CommonIssues from './components/team/CommonIssues';
 import TeamMarketComparison from './components/team/TeamMarketComparison';
 import ScorecardTrends from './components/team/ScorecardTrends';
 import TeamRecommendations from './components/team/TeamRecommendations';
+import TeamRiskTrendChart from './components/team/TeamRiskTrendChart';
 
 const TeamIntelligence = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,6 +45,7 @@ const TeamIntelligence = () => {
   const [marketComparison, setMarketComparison] = useState(null);
   const [scorecardTrends, setScorecardTrends] = useState(null);
   const [recommendations, setRecommendations] = useState(null);
+  const [riskTrend, setRiskTrend] = useState(null);
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -90,7 +92,8 @@ const TeamIntelligence = () => {
           issuesRes,
           marketRes,
           trendsRes,
-          recsRes
+          recsRes,
+          riskTrendRes
         ] = await Promise.all([
           surveyIntelApi.getTeamSummary(teamId),
           surveyIntelApi.getTeamFacilities(teamId),
@@ -98,7 +101,8 @@ const TeamIntelligence = () => {
           surveyIntelApi.getCommonIssues(teamId),
           surveyIntelApi.getMarketComparison(teamId),
           surveyIntelApi.getScorecardTrends(teamId),
-          surveyIntelApi.getRecommendations(teamId)
+          surveyIntelApi.getRecommendations(teamId),
+          surveyIntelApi.getRiskTrend(teamId)
         ]);
 
         setSummary(summaryRes);
@@ -108,6 +112,7 @@ const TeamIntelligence = () => {
         setMarketComparison(marketRes);
         setScorecardTrends(trendsRes);
         setRecommendations(recsRes);
+        setRiskTrend(riskTrendRes);
       } catch (err) {
         console.error('Error fetching team data:', err);
         setError('Failed to load team data. Please try again.');
@@ -294,6 +299,7 @@ const TeamIntelligence = () => {
           {/* Left Column - Summary & Quick Stats */}
           <div className="space-y-6">
             <TeamRiskSummary data={summary} />
+            <TeamRiskTrendChart data={riskTrend} />
             <TeamMarketComparison data={marketComparison} />
           </div>
 

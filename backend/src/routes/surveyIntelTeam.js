@@ -1005,4 +1005,139 @@ router.get('/team/:teamId/recommendations', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/survey-intel/team/:teamId/risk-trend
+ * Historical team risk scores over the last 12 months
+ */
+router.get('/team/:teamId/risk-trend', async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const pool = getExternalPool();
+
+    const team = await Team.findByPk(teamId, {
+      include: [{
+        model: Facility,
+        as: 'facilities',
+        attributes: ['id', 'name', 'ccn']
+      }]
+    });
+
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const ccns = team.facilities.map(f => f.ccn).filter(Boolean);
+
+    if (ccns.length === 0) {
+      return res.json({
+        teamId,
+        teamName: team.name,
+        trend: [],
+        message: 'No facilities with CCN linked to CMS data'
+      });
+    }
+
+    // Get all deficiencies for the last 4 years (to have history for calculations)
+    const fourYearsAgo = new Date();
+    fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
+
+    const { rows: allDeficiencies } = await pool.query(`
+      SELECT
+        d.federal_provider_number,
+        d.deficiency_tag,
+        d.scope_severity,
+        d.survey_date
+      FROM cms_facility_deficiencies d
+      WHERE d.federal_provider_number = ANY($1)
+        AND d.survey_date >= $2
+      ORDER BY d.survey_date DESC
+    `, [ccns, fourYearsAgo.toISOString()]);
+
+    // Calculate risk score for each of the last 12 months
+    const trend = [];
+    const now = new Date();
+
+    for (let i = 11; i >= 0; i--) {
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      const threeYearsBefore = new Date(monthEnd);
+      threeYearsBefore.setFullYear(threeYearsBefore.getFullYear() - 3);
+
+      // Filter deficiencies that would have been visible at this point in time
+      const relevantDefs = allDeficiencies.filter(d => {
+        const surveyDate = new Date(d.survey_date);
+        return surveyDate <= monthEnd && surveyDate >= threeYearsBefore;
+      });
+
+      // Calculate risk per facility
+      const facilityRisks = [];
+      for (const facility of team.facilities) {
+        if (!facility.ccn) continue;
+
+        const facilityDefs = relevantDefs.filter(d => d.federal_provider_number === facility.ccn);
+        const lastSurvey = facilityDefs[0]?.survey_date;
+        const daysSince = lastSurvey
+          ? Math.floor((monthEnd - new Date(lastSurvey)) / (1000 * 60 * 60 * 24))
+          : 999;
+
+        const risk = calculateRiskScore(facilityDefs, daysSince);
+        facilityRisks.push(risk.score);
+      }
+
+      // Team average
+      const avgRisk = facilityRisks.length > 0
+        ? Math.round(facilityRisks.reduce((sum, s) => sum + s, 0) / facilityRisks.length)
+        : 0;
+
+      trend.push({
+        month: monthEnd.toISOString().slice(0, 7), // YYYY-MM format
+        monthLabel: monthEnd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        riskScore: avgRisk,
+        riskLevel: avgRisk > 70 ? 'HIGH' : avgRisk > 40 ? 'MODERATE' : 'LOW'
+      });
+    }
+
+    res.json({
+      teamId,
+      teamName: team.name,
+      facilityCount: ccns.length,
+      trend
+    });
+
+  } catch (error) {
+    console.error('Error fetching risk trend:', error);
+    res.status(500).json({ error: 'Failed to fetch risk trend' });
+  }
+});
+
+/**
+ * GET /api/survey-intel/teams
+ * List all teams for the team selector dropdown
+ */
+router.get('/teams', async (req, res) => {
+  try {
+    const teams = await Team.findAll({
+      attributes: ['id', 'name'],
+      order: [['name', 'ASC']],
+      include: [{
+        model: Facility,
+        as: 'facilities',
+        attributes: ['id', 'ccn']
+      }]
+    });
+
+    const teamsWithCounts = teams.map(team => ({
+      id: team.id,
+      name: team.name,
+      facilityCount: team.facilities.length,
+      facilitiesWithCcn: team.facilities.filter(f => f.ccn).length
+    }));
+
+    res.json({ teams: teamsWithCounts });
+
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
 module.exports = router;

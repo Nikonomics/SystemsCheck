@@ -18,7 +18,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import surveyIntelApi from '../../api/surveyIntelTeam';
-import organizationApi from '../../api/organization';
+import { organizationApi } from '../../api/organization';
 import { TagClickProvider } from './components/TagClickContext';
 import TagDetailModal from './components/TagDetailModal';
 
@@ -59,7 +59,7 @@ const TeamIntelligence = () => {
     const fetchTeams = async () => {
       setTeamsLoading(true);
       try {
-        const response = await organizationApi.getTeams();
+        const response = await organizationApi.listTeams();
         setAvailableTeams(response.teams || []);
       } catch (err) {
         console.error('Error fetching teams:', err);

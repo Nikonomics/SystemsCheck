@@ -3,9 +3,13 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { SkipLink } from '../ui/Accessibility';
+import { useAnalyticsIdentify } from '../../analytics';
 
 export function Layout({ title = 'Dashboard' }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Sync user identity with analytics
+  useAnalyticsIdentify();
 
   return (
     <div className="min-h-screen bg-gray-50">

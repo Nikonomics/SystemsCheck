@@ -5,6 +5,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PostHogProvider } from './analytics';
 import { Login } from './pages/auth/Login';
 import { NotFound } from './pages/NotFound';
 import { Dashboard } from './pages/dashboard/Dashboard';
@@ -28,6 +29,7 @@ const Settings = lazy(() => import('./pages/admin/Settings'));
 const UserProfile = lazy(() => import('./pages/profile/UserProfile'));
 const HistoricalImport = lazy(() => import('./pages/admin/HistoricalImport').then(m => ({ default: m.HistoricalImport })));
 const TemplateEditor = lazy(() => import('./pages/admin/TemplateEditor'));
+const AnalyticsDashboard = lazy(() => import('./pages/admin/AnalyticsDashboard'));
 
 // Loading fallback component
 function PageLoader() {
@@ -44,6 +46,7 @@ function App() {
       <AuthProvider>
         <ToastProvider>
           <Router>
+            <PostHogProvider>
           <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
@@ -111,6 +114,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/analytics"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<PageLoader />}><AnalyticsDashboard /></Suspense>
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           {/* Redirect root to dashboard */}
@@ -119,6 +130,7 @@ function App() {
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+            </PostHogProvider>
           </Router>
         </ToastProvider>
       </AuthProvider>

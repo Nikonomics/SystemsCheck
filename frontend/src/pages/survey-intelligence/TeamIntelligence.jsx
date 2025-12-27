@@ -6,17 +6,19 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { 
-  Users, 
-  Building2, 
-  AlertTriangle, 
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Building2,
+  AlertTriangle,
   TrendingUp,
   ChevronRight,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  ChevronDown
 } from 'lucide-react';
 import surveyIntelApi from '../../api/surveyIntelTeam';
+import organizationApi from '../../api/organization';
 import { TagClickProvider } from './components/TagClickContext';
 import TagDetailModal from './components/TagDetailModal';
 
@@ -30,7 +32,8 @@ import ScorecardTrends from './components/team/ScorecardTrends';
 import TeamRecommendations from './components/team/TeamRecommendations';
 
 const TeamIntelligence = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const teamId = searchParams.get('teamId');
 
   // Data state
@@ -47,10 +50,29 @@ const TeamIntelligence = () => {
   const [error, setError] = useState(null);
   const [selectedTag, setSelectedTag] = useState(null);
 
+  // Team selector state
+  const [availableTeams, setAvailableTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+
+  // Fetch available teams (for selector and team switcher)
+  useEffect(() => {
+    const fetchTeams = async () => {
+      setTeamsLoading(true);
+      try {
+        const response = await organizationApi.getTeams();
+        setAvailableTeams(response.teams || []);
+      } catch (err) {
+        console.error('Error fetching teams:', err);
+      } finally {
+        setTeamsLoading(false);
+      }
+    };
+    fetchTeams();
+  }, []);
+
   // Fetch all data
   useEffect(() => {
     if (!teamId) {
-      setError('No team selected. Please select a team from the navigation.');
       setLoading(false);
       return;
     }
@@ -102,21 +124,74 @@ const TeamIntelligence = () => {
     setSelectedTag(tag);
   };
 
+  // Handle team selection
+  const handleTeamSelect = (selectedTeamId) => {
+    if (selectedTeamId) {
+      setSearchParams({ teamId: selectedTeamId });
+    }
+  };
+
   if (!teamId) {
     return (
       <div className="p-6">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-yellow-800 mb-2">No Team Selected</h2>
-          <p className="text-yellow-700 mb-4">
-            Please select a team from the sidebar or navigation to view team intelligence.
-          </p>
-          <Link 
-            to="/facilities" 
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Go to Facilities →
-          </Link>
+        <div className="max-w-lg mx-auto">
+          <div className="bg-white border border-gray-200 rounded-lg p-8 shadow-sm">
+            <div className="text-center mb-6">
+              <Users className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Team Intelligence</h2>
+              <p className="text-gray-600">
+                Select a team to view aggregated risk analysis, scorecard trends, and recommendations.
+              </p>
+            </div>
+
+            {teamsLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <RefreshCw className="w-5 h-5 text-blue-500 animate-spin mr-2" />
+                <span className="text-gray-600">Loading teams...</span>
+              </div>
+            ) : availableTeams.length > 0 ? (
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select a Team
+                </label>
+                <div className="relative">
+                  <select
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => handleTeamSelect(e.target.value)}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Choose a team...</option>
+                    {availableTeams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name} ({team.facilityCount} facilities)
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-gray-500">No teams available.</p>
+                <Link
+                  to="/admin/organization"
+                  className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block"
+                >
+                  Create a team →
+                </Link>
+              </div>
+            )}
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <p className="text-sm text-gray-500 text-center">
+                Or view individual facility intelligence on the{' '}
+                <Link to="/survey-intelligence" className="text-blue-600 hover:text-blue-700">
+                  Survey Intelligence
+                </Link>{' '}
+                page.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -158,10 +233,30 @@ const TeamIntelligence = () => {
               <ChevronRight className="w-4 h-4" />
               <span>Team View</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <Users className="w-7 h-7 text-blue-600" />
-              {summary?.teamName || 'Team'}
-            </h1>
+              {/* Team Switcher Dropdown */}
+              {availableTeams.length > 1 ? (
+                <div className="relative">
+                  <select
+                    value={teamId || ''}
+                    onChange={(e) => handleTeamSelect(e.target.value)}
+                    className="text-2xl font-bold text-gray-900 bg-transparent border-none cursor-pointer appearance-none pr-8 focus:outline-none focus:ring-0"
+                  >
+                    {availableTeams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              ) : (
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {summary?.teamName || 'Team'}
+                </h1>
+              )}
+            </div>
             <p className="text-gray-600 mt-1">
               {summary?.facilityCount || 0} facilities · Risk + Scorecard Analysis
             </p>

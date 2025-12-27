@@ -17,7 +17,7 @@ const navigation = [
   { name: 'Scorecards', href: '/scorecards', icon: ClipboardCheck },
   { name: 'Facilities', href: '/facilities', icon: Building2 },
   { name: 'Survey Analytics', href: '/survey-analytics', icon: Activity },
-  { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain },
+  { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain, end: true },
   { name: 'Team Intelligence', href: '/survey-intelligence/team', icon: Users },
 ];
 
@@ -45,6 +45,7 @@ export function Sidebar() {
           <NavLink
             key={item.name}
             to={item.href}
+            end={item.end}
             className={({ isActive }) =>
               `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                 isActive

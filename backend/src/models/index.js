@@ -14,6 +14,8 @@ const AuditTemplateSystem = require('./AuditTemplateSystem');
 const AuditTemplateItem = require('./AuditTemplateItem');
 const SurveyIntelligence = require('./SurveyIntelligence');
 const ImportBatch = require('./ImportBatch');
+const KevHistorical = require('./KevHistorical');
+const KevHistoricalCategory = require('./KevHistoricalCategory');
 
 // Company - Team associations
 Company.hasMany(Team, { foreignKey: 'companyId', as: 'teams' });
@@ -107,6 +109,19 @@ Scorecard.belongsTo(ImportBatch, { foreignKey: 'importBatchId', as: 'importBatch
 User.hasMany(ImportBatch, { foreignKey: 'createdById', as: 'importBatches' });
 ImportBatch.belongsTo(User, { foreignKey: 'createdById', as: 'createdBy' });
 
+// KevHistorical associations
+Facility.hasMany(KevHistorical, { foreignKey: 'facilityId', as: 'kevHistoricals' });
+KevHistorical.belongsTo(Facility, { foreignKey: 'facilityId', as: 'facility' });
+
+KevHistorical.hasMany(KevHistoricalCategory, { foreignKey: 'kevHistoricalId', as: 'categories', onDelete: 'CASCADE' });
+KevHistoricalCategory.belongsTo(KevHistorical, { foreignKey: 'kevHistoricalId', as: 'kevHistorical' });
+
+User.hasMany(KevHistorical, { foreignKey: 'importedById', as: 'importedKevHistoricals' });
+KevHistorical.belongsTo(User, { foreignKey: 'importedById', as: 'importedBy' });
+
+ImportBatch.hasMany(KevHistorical, { foreignKey: 'importBatchId', as: 'kevHistoricals' });
+KevHistorical.belongsTo(ImportBatch, { foreignKey: 'importBatchId', as: 'importBatch' });
+
 module.exports = {
   sequelize,
   Company,
@@ -123,5 +138,7 @@ module.exports = {
   AuditTemplateSystem,
   AuditTemplateItem,
   SurveyIntelligence,
-  ImportBatch
+  ImportBatch,
+  KevHistorical,
+  KevHistoricalCategory
 };

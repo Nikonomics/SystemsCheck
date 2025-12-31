@@ -35,6 +35,7 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { KevHistoricalPanel } from '../../components/facility/KevHistoricalPanel';
 
 // CMS Tab Components
 import {
@@ -646,17 +647,15 @@ function ScorecardsTabContent({
                               </Button>
                             </Link>
                           )}
-                          {scorecard.status !== 'hard_close' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Delete"
-                              onClick={() => setDeleteModal({ open: true, scorecard })}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Delete"
+                            onClick={() => setDeleteModal({ open: true, scorecard })}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -676,6 +675,9 @@ function ScorecardsTabContent({
           </div>
         )}
       </Card>
+
+      {/* KEV Historical Scorecards */}
+      <KevHistoricalPanel facilityId={id} />
     </>
   );
 }

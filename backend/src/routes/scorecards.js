@@ -1082,14 +1082,8 @@ router.delete('/scorecards/:id', async (req, res) => {
       });
     }
 
-    // Only allow deletion of draft or trial_close scorecards
-    if (scorecard.status === 'hard_close') {
-      await transaction.rollback();
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Cannot delete a hard-closed scorecard. Hard-closed scorecards are permanent records.'
-      });
-    }
+    // Note: Previously blocked hard_close deletion, but now allowing for imported/historical data cleanup
+    // Admin users can delete any scorecard
 
     // Store info for response before deletion
     const deletedInfo = {

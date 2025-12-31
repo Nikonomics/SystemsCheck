@@ -29,6 +29,7 @@ const OrganizationManagement = lazy(() => import('./pages/admin/OrganizationMana
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const UserProfile = lazy(() => import('./pages/profile/UserProfile'));
 const HistoricalImport = lazy(() => import('./pages/admin/HistoricalImport').then(m => ({ default: m.HistoricalImport })));
+const KevHistoricalImport = lazy(() => import('./pages/admin/KevHistoricalImport').then(m => ({ default: m.KevHistoricalImport })));
 const TemplateEditor = lazy(() => import('./pages/admin/TemplateEditor'));
 const AnalyticsDashboard = lazy(() => import('./pages/admin/AnalyticsDashboard'));
 
@@ -105,6 +106,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Suspense fallback={<PageLoader />}><HistoricalImport /></Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/import/kev"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<PageLoader />}><KevHistoricalImport /></Suspense>
                 </ProtectedRoute>
               }
             />

@@ -3,11 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { importApi } from '../../api/import';
 import { parseExcelFile, downloadTemplate } from '../../utils/excelUtils';
 import { parseMultipleFilesAuto } from '../../utils/scorecardParser';
+import { KevHistoricalImport } from './KevHistoricalImport';
 
 const STEPS = ['upload', 'validate', 'confirm', 'import'];
 
+const IMPORT_TABS = [
+  { id: 'snf', label: 'SNF Scorecards', description: 'Clinical Systems Review (7 systems, 700 points)' },
+  { id: 'kev', label: 'KEV Scorecards', description: 'KEV Historical (4 categories, cover sheet only)' }
+];
+
 export function HistoricalImport() {
   const navigate = useNavigate();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState('snf');
 
   // Mode: 'summary' for system-level scores, 'full' for item-level data
   const [importMode, setImportMode] = useState('full');
@@ -271,6 +280,36 @@ export function HistoricalImport() {
         </button>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            {IMPORT_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); handleReset(); }}
+                className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div>{tab.label}</div>
+                <div className="text-xs font-normal text-gray-400 mt-0.5">{tab.description}</div>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* KEV Import Tab */}
+      {activeTab === 'kev' && (
+        <KevHistoricalImport />
+      )}
+
+      {/* SNF Import Tab */}
+      {activeTab === 'snf' && (
+        <>
       {/* Import History Panel */}
       {showHistory && (
         <div className="bg-white shadow rounded-lg">
@@ -925,6 +964,8 @@ export function HistoricalImport() {
             ) : null}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

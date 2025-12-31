@@ -1,0 +1,111 @@
+deficiency_tag,primary_system_id,primary_system_name,secondary_system_id,secondary_system_name,rationale,citation_frequency
+F0580,1,Change of Condition,,,Notification of changes - requires immediate notification of condition changes,High
+F0684,1,Change of Condition,3,Skin,Quality of care - treatment according to orders; also relates to skin care,Very High
+F0685,1,Change of Condition,,,Vision/hearing services - addressing changes in sensory status,Medium
+F0656,1,Change of Condition,6,Transfer/Discharge,Care plan development - comprehensive care planning for conditions,Very High
+F0657,1,Change of Condition,,,Care plan timing - timely updates for condition changes,High
+F0636,1,Change of Condition,,,Comprehensive assessment - detecting condition changes,Medium
+F0637,1,Change of Condition,,,Significant change assessment - response to condition changes,Medium
+F0641,1,Change of Condition,,,Accurate assessment - identifying condition status,High
+F0655,1,Change of Condition,,,Immediate care planning - addressing urgent conditions,Medium
+F0638,1,Change of Condition,,,Quarterly assessment updates - ongoing condition monitoring,Medium
+F0658,1,Change of Condition,,,Professional standards - care meeting professional standards,High
+F0552,1,Change of Condition,,,Health status information - keeping residents informed of changes,Medium
+F0698,1,Change of Condition,,,Dialysis care - monitoring dialysis patients for changes,Medium
+F0697,1,Change of Condition,,,Pain management - responding to pain as condition indicator,Medium
+F0699,1,Change of Condition,,,Trauma-informed care - recognizing behavioral changes,Medium
+F0689,2,Accidents/Falls,,,Accident hazards and supervision - primary falls/accidents prevention,Very High
+F0688,2,Accidents/Falls,,,Range of motion - mobility and fall risk,High
+F0676,2,Accidents/Falls,,,ADL maintenance - preventing functional decline leading to falls,Medium
+F0677,2,Accidents/Falls,,,ADL assistance - safe assistance to prevent falls during care,High
+F0700,2,Accidents/Falls,,,Safety features - environmental safety for fall prevention,Medium
+F0584,2,Accidents/Falls,7,Abuse/Grievances,Safe environment - homelike but safe environment,High
+F0919,2,Accidents/Falls,,,Electrical equipment safety - environmental hazard prevention,Medium
+F0921,2,Accidents/Falls,,,Electrical testing - preventing electrical hazards,Medium
+F0912,2,Accidents/Falls,,,Grounded receptacles - electrical safety,Medium
+F0908,2,Accidents/Falls,,,Gas/vacuum systems - environmental safety,Medium
+F0925,2,Accidents/Falls,,,Ignition sources - fire/burn prevention,Medium
+F0791,2,Accidents/Falls,,,Construction safety - safe areas during construction,Medium
+F0678,2,Accidents/Falls,1,Change of Condition,CPR/life support - emergency response to accidents,Medium
+F0694,2,Accidents/Falls,1,Change of Condition,IV administration - safe IV practices to prevent complications,Medium
+F0686,3,Skin,,,Pressure ulcer prevention and care - primary skin integrity tag,Very High
+F0687,3,Skin,,,Foot care - skin integrity of feet,Medium
+F0690,3,Skin,,,Continence care - preventing skin breakdown from incontinence,High
+F0695,3,Skin,1,Change of Condition,Respiratory care - tracheostomy skin care,High
+F0755,4,Med Management/Weight Loss,,,Pharmaceutical services - overall pharmacy operations,High
+F0756,4,Med Management/Weight Loss,,,Drug regimen review - monthly pharmacist review,High
+F0757,4,Med Management/Weight Loss,,,Unnecessary drugs - reducing medication burden,Medium
+F0758,4,Med Management/Weight Loss,7,Abuse/Grievances,Gradual dose reduction - antipsychotic reduction,High
+F0759,4,Med Management/Weight Loss,,,Medication error rate - error prevention,High
+F0760,4,Med Management/Weight Loss,,,Significant medication errors - serious error prevention,High
+F0761,4,Med Management/Weight Loss,,,Pharmacy services (miscategorized in CMS data),High
+F0692,4,Med Management/Weight Loss,,,Nutrition/hydration - adequate food/fluids,High
+F0693,4,Med Management/Weight Loss,,,Tube feeding - appropriate enteral nutrition,Medium
+F0740,4,Med Management/Weight Loss,7,Abuse/Grievances,Behavioral health services - psychotropic use appropriateness,Medium
+F0744,4,Med Management/Weight Loss,7,Abuse/Grievances,Dementia care - appropriate treatment including medications,Medium
+F0554,4,Med Management/Weight Loss,,,Self-administration of drugs - appropriate when safe,Medium
+F0812,4,Med Management/Weight Loss,5,Infection Control,Food procurement/storage - nutrition and food safety,Very High
+F0803,4,Med Management/Weight Loss,,,Menu nutritional needs - dietary planning,Medium
+F0804,4,Med Management/Weight Loss,,,Palatable food - encouraging adequate intake,High
+F0805,4,Med Management/Weight Loss,,,Food preparation form - appropriate textures,Medium
+F0806,4,Med Management/Weight Loss,,,Dietary accommodations - special diets,Medium
+F0809,4,Med Management/Weight Loss,,,Meal timing - regular nutrition schedule,Medium
+F0801,4,Med Management/Weight Loss,,,Dietary staff competency - nutrition expertise,Medium
+F0802,4,Med Management/Weight Loss,,,Dietary support staff - adequate nutrition services,Medium
+F0814,4,Med Management/Weight Loss,5,Infection Control,Garbage disposal - food safety and infection control,Medium
+F0880,5,Infection Control,,,Infection prevention program - primary IC tag,Very High
+F0881,5,Infection Control,4,Med Management/Weight Loss,Antibiotic stewardship - antibiotic use monitoring,Medium
+F0882,5,Infection Control,,,Infection preventionist - qualified IC professional,Medium
+F0883,5,Infection Control,,,Flu/pneumonia vaccinations - immunization program,Medium
+F0884,5,Infection Control,,,COVID data reporting - pandemic surveillance,Medium
+F0885,5,Infection Control,,,COVID resident/family notification,Medium
+F0886,5,Infection Control,,,COVID testing - pandemic response,Medium
+F0887,5,Infection Control,,,COVID vaccination - pandemic vaccination,Medium
+F0888,5,Infection Control,,,Staff COVID vaccination - staff vaccination compliance,Medium
+F0622,6,Transfer/Discharge,,,Transfer/discharge rights - appropriate transfers only,Medium
+F0623,6,Transfer/Discharge,,,Transfer notification - timely notice requirements,High
+F0624,6,Transfer/Discharge,,,Safe transfer preparation - preparing for transition,Medium
+F0625,6,Transfer/Discharge,,,Bed hold notification - return rights communication,Medium
+F0626,6,Transfer/Discharge,,,Return rights - permitting return after hospitalization,Medium
+F0627,6,Transfer/Discharge,,,Transfer/discharge planning - meeting needs at discharge,Medium
+F0660,6,Transfer/Discharge,1,Change of Condition,Discharge planning - planning for discharge goals,Medium
+F0661,6,Transfer/Discharge,1,Change of Condition,Information transfer - communication to receiving providers,Medium
+F0849,6,Transfer/Discharge,,,Hospice services - end-of-life transitions,Medium
+F0600,7,Abuse/Grievances,,,Abuse prevention - protection from all abuse types,High
+F0602,7,Abuse/Grievances,,,Exploitation prevention - protecting belongings/money,Medium
+F0603,7,Abuse/Grievances,,,Involuntary seclusion - preventing inappropriate isolation,Medium
+F0604,7,Abuse/Grievances,2,Accidents/Falls,Physical restraints - freedom from restraints,Medium
+F0605,7,Abuse/Grievances,4,Med Management/Weight Loss,Chemical restraints - freedom from medication restraints,Medium
+F0606,7,Abuse/Grievances,,,Background checks - not hiring abusers,Medium
+F0607,7,Abuse/Grievances,,,Abuse prevention policies - written policies,Medium
+F0608,7,Abuse/Grievances,,,Reporting requirements - staff reporting obligations,Medium
+F0609,7,Abuse/Grievances,,,Timely abuse reporting - investigation and reporting,High
+F0610,7,Abuse/Grievances,,,Violation response - appropriate response to allegations,High
+F0585,7,Abuse/Grievances,,,Grievance rights - right to complain without reprisal,Medium
+F0550,7,Abuse/Grievances,,,Dignity and self-determination - core rights,High
+F0557,7,Abuse/Grievances,,,Respect and dignity - treatment with respect,Medium
+F0558,7,Abuse/Grievances,,,Reasonable accommodation - meeting preferences,High
+F0561,7,Abuse/Grievances,,,Visitation rights - family contact,Medium
+F0565,7,Abuse/Grievances,,,Resident/family groups - organizing rights,Medium
+F0577,7,Abuse/Grievances,,,Survey access - viewing survey results,Medium
+F0578,7,Abuse/Grievances,1,Change of Condition,Refuse treatment - right to refuse care,High
+F0582,7,Abuse/Grievances,,,Medicare/Medicaid notice - coverage information,Medium
+F0583,7,Abuse/Grievances,,,Privacy rights - medical record confidentiality,Medium
+F0842,7,Abuse/Grievances,,,Medical record security - information protection,High
+F0725,1,Change of Condition,2,Accidents/Falls,Sufficient nursing staff - affects all clinical systems,Medium
+F0726,1,Change of Condition,,,Staff competencies - training for condition recognition,Medium
+F0727,1,Change of Condition,,,RN coverage - skilled oversight for condition changes,Medium
+F0730,1,Change of Condition,,,Nurse aide competency - training and performance,Medium
+F0732,1,Change of Condition,,,Staffing posting - transparency in staffing levels,Medium
+F0835,1,Change of Condition,,,Facility administration - resource management,Medium
+F0838,1,Change of Condition,,,Facility assessment - understanding care needs,Medium
+F0851,1,Change of Condition,,,Staffing data submission - accurate staffing reporting,Medium
+F0865,1,Change of Condition,,,QAPI plan - quality assurance planning,Medium
+F0867,1,Change of Condition,,,QAA group - quality oversight,Medium
+F0868,1,Change of Condition,,,QAA membership - quality committee requirements,Medium
+F0770,1,Change of Condition,5,Infection Control,Laboratory services - timely testing for condition changes,Medium
+F0947,1,Change of Condition,,,Nurse aide skills - competency verification,Medium
+F0644,7,Abuse/Grievances,1,Change of Condition,PASARR coordination - mental health assessment coordination,Medium
+F0645,7,Abuse/Grievances,1,Change of Condition,PASARR screening - mental disorder/ID screening,Medium
+F0679,7,Abuse/Grievances,,,Activities programming - meeting psychosocial needs,Medium
+F0745,7,Abuse/Grievances,,,Social services - psychosocial support,Medium

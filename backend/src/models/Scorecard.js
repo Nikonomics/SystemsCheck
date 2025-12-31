@@ -88,6 +88,15 @@ const Scorecard = sequelize.define('Scorecard', {
       model: 'users',
       key: 'id'
     }
+  },
+  importBatchId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'import_batch_id',
+    references: {
+      model: 'import_batches',
+      key: 'id'
+    }
   }
 }, {
   tableName: 'scorecards',

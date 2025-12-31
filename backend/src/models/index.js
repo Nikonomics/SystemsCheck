@@ -12,6 +12,8 @@ const ScorecardActivityLog = require('./ScorecardActivityLog');
 const AuditTemplate = require('./AuditTemplate');
 const AuditTemplateSystem = require('./AuditTemplateSystem');
 const AuditTemplateItem = require('./AuditTemplateItem');
+const SurveyIntelligence = require('./SurveyIntelligence');
+const ImportBatch = require('./ImportBatch');
 
 // Company - Team associations
 Company.hasMany(Team, { foreignKey: 'companyId', as: 'teams' });
@@ -94,6 +96,17 @@ AuditTemplate.belongsTo(User, { foreignKey: 'createdById', as: 'createdBy' });
 User.hasMany(AuditTemplate, { foreignKey: 'updatedById', as: 'updatedTemplates' });
 AuditTemplate.belongsTo(User, { foreignKey: 'updatedById', as: 'updatedBy' });
 
+// Facility - SurveyIntelligence associations
+Facility.hasOne(SurveyIntelligence, { foreignKey: 'facilityId', as: 'surveyIntelligence' });
+SurveyIntelligence.belongsTo(Facility, { foreignKey: 'facilityId', as: 'facility' });
+
+// ImportBatch associations
+ImportBatch.hasMany(Scorecard, { foreignKey: 'importBatchId', as: 'scorecards' });
+Scorecard.belongsTo(ImportBatch, { foreignKey: 'importBatchId', as: 'importBatch' });
+
+User.hasMany(ImportBatch, { foreignKey: 'createdById', as: 'importBatches' });
+ImportBatch.belongsTo(User, { foreignKey: 'createdById', as: 'createdBy' });
+
 module.exports = {
   sequelize,
   Company,
@@ -108,5 +121,7 @@ module.exports = {
   ScorecardActivityLog,
   AuditTemplate,
   AuditTemplateSystem,
-  AuditTemplateItem
+  AuditTemplateItem,
+  SurveyIntelligence,
+  ImportBatch
 };

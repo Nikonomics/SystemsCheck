@@ -1,0 +1,28 @@
+qm_code,qm_name,qm_type,primary_system_id,primary_system_name,secondary_system_id,secondary_system_name,higher_is_worse,rationale
+401,Long-Stay Falls with Major Injury,long_stay,2,Accidents/Falls,,,true,Falls resulting in fractures/head injuries indicate fall prevention failures
+402,Long-Stay High-Risk Pressure Ulcers,long_stay,3,Skin,,,true,Pressure ulcers in high-risk residents indicate skin care failures
+403,Long-Stay Catheter Use,long_stay,5,Infection Control,4,Med Management/Weight Loss,true,Inappropriate catheter use increases UTI risk
+404,Long-Stay UTI,long_stay,5,Infection Control,,,true,Urinary tract infections indicate infection control issues
+405,Long-Stay Antipsychotic Use (No Diagnosis),long_stay,4,Med Management/Weight Loss,7,Abuse/Grievances,true,Inappropriate antipsychotic use may indicate chemical restraint
+406,Long-Stay Physical Restraints,long_stay,7,Abuse/Grievances,2,Accidents/Falls,true,Restraint use indicates potential rights issues and fall risk
+407,Long-Stay Weight Loss,long_stay,4,Med Management/Weight Loss,,,true,Unplanned weight loss indicates nutrition management issues
+408,Long-Stay Depressive Symptoms,long_stay,4,Med Management/Weight Loss,7,Abuse/Grievances,true,Depression may indicate need for psychotropic review or psychosocial care
+409,Long-Stay Mobility Decline,long_stay,2,Accidents/Falls,1,Change of Condition,true,Mobility decline increases fall risk and indicates condition changes
+410,Long-Stay Functional Decline in ADLs,long_stay,1,Change of Condition,2,Accidents/Falls,true,ADL decline indicates condition changes requiring intervention
+411,Long-Stay Excessive Weight Loss,long_stay,4,Med Management/Weight Loss,1,Change of Condition,true,Excessive weight loss is a condition change requiring intervention
+412,Long-Stay Bowel Incontinence,long_stay,3,Skin,1,Change of Condition,true,Incontinence increases skin breakdown risk
+413,Long-Stay Bladder Incontinence,long_stay,3,Skin,5,Infection Control,true,Incontinence increases skin and infection risks
+414,Long-Stay Pain,long_stay,1,Change of Condition,4,Med Management/Weight Loss,true,Uncontrolled pain indicates condition and medication management issues
+415,Long-Stay Ability to Move Independently Worsened,long_stay,2,Accidents/Falls,1,Change of Condition,true,Mobility decline increases fall risk
+501,Short-Stay Rehospitalization,short_stay,1,Change of Condition,6,Transfer/Discharge,true,Rehospitalization indicates missed condition changes or poor transitions
+502,Short-Stay ED Visit,short_stay,1,Change of Condition,6,Transfer/Discharge,true,ED visits indicate missed condition changes or poor transitions
+503,Short-Stay Successful Discharge to Community,short_stay,6,Transfer/Discharge,,,false,Higher discharge rate indicates successful rehabilitation/transition
+504,Short-Stay Functional Improvement,short_stay,6,Transfer/Discharge,1,Change of Condition,false,Functional improvement indicates successful short-stay care
+505,Short-Stay New or Worsening Pressure Ulcers,short_stay,3,Skin,1,Change of Condition,true,New pressure ulcers in short-stay indicate skin care failures
+506,Short-Stay Falls with Major Injury,short_stay,2,Accidents/Falls,,,true,Falls in short-stay indicate immediate safety issues
+507,Short-Stay Antipsychotic Use,short_stay,4,Med Management/Weight Loss,7,Abuse/Grievances,true,New antipsychotic starts may indicate inappropriate medication use
+508,Short-Stay Self-Report Moderate-Severe Pain,short_stay,1,Change of Condition,4,Med Management/Weight Loss,true,Pain indicates need for medication and condition management
+VBP_READMIT,SNF VBP Readmission Rate,vbp,1,Change of Condition,6,Transfer/Discharge,true,30-day readmission rate - key VBP measure
+VBP_HAI,SNF VBP Healthcare-Associated Infection Rate,vbp,5,Infection Control,,,true,HAI rate indicates infection control program effectiveness
+VBP_TURNOVER,SNF VBP Staff Turnover,vbp,1,Change of Condition,,,true,High turnover affects all clinical systems
+VBP_STAFFING,SNF VBP Staffing Hours,vbp,1,Change of Condition,2,Accidents/Falls,false,Higher staffing supports all clinical areas

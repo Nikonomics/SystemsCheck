@@ -272,8 +272,16 @@ export function FacilityDetail() {
           )}
         </div>
 
-        {/* New Scorecard button - always visible */}
+        {/* Action buttons */}
         <div className="flex gap-2">
+          {facility.ccn && (
+            <Link to={`/facilities/${id}/survey-intelligence`}>
+              <Button variant="outline">
+                <Activity className="h-4 w-4 mr-2" />
+                Survey Intelligence
+              </Button>
+            </Link>
+          )}
           {currentMonthScorecard && currentMonthScorecard.status === 'draft' && (
             <Link to={`/scorecards/${currentMonthScorecard.id}/edit`}>
               <Button variant="secondary">

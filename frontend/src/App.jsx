@@ -11,6 +11,7 @@ import { NotFound } from './pages/NotFound';
 import { Dashboard } from './pages/dashboard/Dashboard';
 import { FacilityList } from './pages/facilities/FacilityList';
 import { FacilityDetail } from './pages/facilities/FacilityDetail';
+import { FacilitySurveyIntelligence } from './pages/facilities/FacilitySurveyIntelligence';
 
 // Lazy-loaded pages for code splitting
 const ScorecardsList = lazy(() => import('./pages/scorecards/ScorecardsList').then(m => ({ default: m.ScorecardsList })));
@@ -65,6 +66,7 @@ function App() {
             <Route path="/scorecards/:id/edit" element={<Suspense fallback={<PageLoader />}><ScorecardForm /></Suspense>} />
             <Route path="/facilities" element={<FacilityList />} />
             <Route path="/facilities/:id" element={<FacilityDetail />} />
+            <Route path="/facilities/:id/survey-intelligence" element={<FacilitySurveyIntelligence />} />
             <Route path="/facilities/:facilityId/scorecards/new" element={<Suspense fallback={<PageLoader />}><ScorecardForm /></Suspense>} />
             <Route path="/reports/teams" element={<Suspense fallback={<PageLoader />}><TeamComparison /></Suspense>} />
             <Route path="/reports/companies" element={<Suspense fallback={<PageLoader />}><CompanyComparison /></Suspense>} />

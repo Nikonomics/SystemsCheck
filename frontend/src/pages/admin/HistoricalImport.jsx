@@ -1,53 +1,140 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { importApi } from '../../api/import';
 import { parseExcelFile, downloadTemplate } from '../../utils/excelUtils';
+import { parseMultipleFilesAuto } from '../../utils/scorecardParser';
 
 const STEPS = ['upload', 'validate', 'confirm', 'import'];
 
 export function HistoricalImport() {
   const navigate = useNavigate();
+
+  // Mode: 'summary' for system-level scores, 'full' for item-level data
+  const [importMode, setImportMode] = useState('full');
+
   const [currentStep, setCurrentStep] = useState('upload');
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [parsedData, setParsedData] = useState([]);
   const [validationResults, setValidationResults] = useState(null);
   const [importResults, setImportResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [defaultYear, setDefaultYear] = useState(new Date().getFullYear());
 
-  // Handle file selection
-  const handleFile = async (selectedFile) => {
-    if (!selectedFile) return;
+  // Date overrides for files that need manual input
+  const [dateOverrides, setDateOverrides] = useState({});
 
-    // Validate file type
-    const validTypes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-    ];
-    if (!validTypes.includes(selectedFile.type) && !selectedFile.name.match(/\.xlsx?$/i)) {
-      setError('Please upload an Excel file (.xlsx or .xls)');
-      return;
+  // Import history
+  const [importHistory, setImportHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load import history on mount
+  useEffect(() => {
+    loadImportHistory();
+  }, []);
+
+  const loadImportHistory = async () => {
+    try {
+      const { batches } = await importApi.getHistory();
+      setImportHistory(batches || []);
+    } catch (err) {
+      console.error('Failed to load import history:', err);
     }
+  };
 
-    setFile(selectedFile);
-    setError(null);
+  // Handle date override changes
+  const handleDateOverride = (filename, field, value) => {
+    setDateOverrides(prev => ({
+      ...prev,
+      [filename]: {
+        ...prev[filename],
+        [field]: value ? parseInt(value) : null
+      }
+    }));
+  };
+
+  // Re-validate with date overrides
+  const revalidateWithOverrides = async () => {
+    if (!files.length) return;
 
     try {
       setLoading(true);
-      const data = await parseExcelFile(selectedFile);
-      if (data.length === 0) {
-        setError('No data found in the file');
-        return;
-      }
-      setParsedData(data);
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+      formData.append('year', defaultYear);
+      formData.append('dateOverrides', JSON.stringify(dateOverrides));
 
-      // Validate the data
-      const results = await importApi.validate(data);
+      const results = await importApi.validateFull(formData);
       setValidationResults(results);
+    } catch (err) {
+      setError(err.message || 'Failed to revalidate');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle file selection - supports multiple files for full mode
+  const handleFiles = async (selectedFiles) => {
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const fileArray = Array.from(selectedFiles);
+
+    // Validate file types
+    const validFiles = fileArray.filter(f =>
+      f.name.match(/\.xlsx?$/i) ||
+      f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      f.type === 'application/vnd.ms-excel'
+    );
+
+    if (validFiles.length === 0) {
+      setError('Please upload Excel files (.xlsx or .xls)');
+      return;
+    }
+
+    if (validFiles.length !== fileArray.length) {
+      setError(`${fileArray.length - validFiles.length} non-Excel files were ignored`);
+    }
+
+    setFiles(validFiles);
+    setError(null);
+    setDateOverrides({}); // Reset overrides for new files
+
+    try {
+      setLoading(true);
+
+      if (importMode === 'full') {
+        // Full item-level import - parse locally first for preview (auto-detects format)
+        const parsed = await parseMultipleFilesAuto(validFiles, { year: defaultYear });
+        setParsedData(parsed);
+
+        // Validate with server
+        const formData = new FormData();
+        validFiles.forEach(f => formData.append('files', f));
+        formData.append('year', defaultYear);
+        formData.append('dateOverrides', JSON.stringify({}));
+
+        const results = await importApi.validateFull(formData);
+        setValidationResults(results);
+      } else {
+        // Summary import (existing behavior - single file)
+        if (validFiles.length > 1) {
+          setError('Summary import only supports one file at a time');
+          return;
+        }
+        const data = await parseExcelFile(validFiles[0]);
+        if (data.length === 0) {
+          setError('No data found in the file');
+          return;
+        }
+        setParsedData(data);
+        const results = await importApi.validate(data);
+        setValidationResults(results);
+      }
+
       setCurrentStep('validate');
     } catch (err) {
-      setError(err.message || 'Failed to parse file');
+      setError(err.message || 'Failed to parse file(s)');
     } finally {
       setLoading(false);
     }
@@ -68,10 +155,10 @@ export function HistoricalImport() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
     }
-  }, []);
+  }, [importMode, defaultYear]);
 
   // Download template
   const handleDownloadTemplate = async () => {
@@ -88,24 +175,44 @@ export function HistoricalImport() {
 
   // Proceed to confirm step
   const handleProceedToConfirm = () => {
-    if (validationResults?.valid > 0) {
+    const validCount = importMode === 'full'
+      ? validationResults?.valid
+      : validationResults?.valid;
+    if (validCount > 0) {
       setCurrentStep('confirm');
     }
   };
 
   // Perform import
   const handleImport = async () => {
-    const validRows = validationResults.rows.filter((r) => r.isValid);
-    const validData = validRows.map((r) => {
-      const original = parsedData[r.row - 1];
-      return original;
-    });
-
     try {
       setLoading(true);
       setCurrentStep('import');
-      const results = await importApi.importHistorical(validData);
-      setImportResults(results);
+
+      if (importMode === 'full') {
+        // Full item-level import
+        const formData = new FormData();
+
+        // Only include valid files
+        const validFilenames = validationResults.results
+          .filter(r => r.isValid)
+          .map(r => r.filename);
+
+        files.filter(f => validFilenames.includes(f.name))
+          .forEach(f => formData.append('files', f));
+        formData.append('year', defaultYear);
+        formData.append('dateOverrides', JSON.stringify(dateOverrides));
+
+        const results = await importApi.importFull(formData);
+        setImportResults(results);
+        loadImportHistory(); // Refresh history
+      } else {
+        // Summary import
+        const validRows = validationResults.rows.filter((r) => r.isValid);
+        const validData = validRows.map((r) => parsedData[r.row - 1]);
+        const results = await importApi.importHistorical(validData);
+        setImportResults(results);
+      }
     } catch (err) {
       setError(err.message || 'Import failed');
       setCurrentStep('confirm');
@@ -114,23 +221,160 @@ export function HistoricalImport() {
     }
   };
 
+  // Rollback a batch
+  const handleRollback = async (batchId) => {
+    if (!confirm('Are you sure you want to rollback this import? All imported scorecards will be deleted.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await importApi.rollback(batchId);
+      loadImportHistory();
+    } catch (err) {
+      setError('Failed to rollback: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reset and start over
   const handleReset = () => {
     setCurrentStep('upload');
-    setFile(null);
+    setFiles([]);
     setParsedData([]);
     setValidationResults(null);
     setImportResults(null);
     setError(null);
+    setDateOverrides({});
+  };
+
+  // Format date for display
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleString();
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Historical Data Import</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Import scorecard data from previous months before system launch
-        </p>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Historical Data Import</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Import scorecard data from previous months
+          </p>
+        </div>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          {showHistory ? 'Hide History' : 'Import History'}
+        </button>
+      </div>
+
+      {/* Import History Panel */}
+      {showHistory && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h3 className="font-medium text-gray-900">Import History</h3>
+          </div>
+          <div className="divide-y divide-gray-200 max-h-64 overflow-auto">
+            {importHistory.length === 0 ? (
+              <div className="px-4 py-6 text-center text-gray-500">
+                No import history
+              </div>
+            ) : (
+              importHistory.map(batch => (
+                <div key={batch.batchId} className="px-4 py-3 flex justify-between items-center">
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {batch.totalFiles} files - {batch.importType}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {formatDate(batch.createdAt)} by {batch.createdBy?.firstName} {batch.createdBy?.lastName}
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-green-600">{batch.successCount} imported</span>
+                      {batch.failedCount > 0 && (
+                        <span className="text-red-600 ml-2">{batch.failedCount} failed</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      batch.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      batch.status === 'rolled_back' ? 'bg-gray-100 text-gray-800' :
+                      batch.status === 'completed_with_errors' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {batch.status.replace(/_/g, ' ')}
+                    </span>
+                    {batch.status !== 'rolled_back' && (
+                      <button
+                        onClick={() => handleRollback(batch.batchId)}
+                        className="text-sm text-red-600 hover:text-red-800"
+                        disabled={loading}
+                      >
+                        Rollback
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Import Mode Toggle */}
+      <div className="bg-white shadow rounded-lg p-4">
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-gray-700">Import Mode:</span>
+          <div className="flex rounded-md shadow-sm">
+            <button
+              onClick={() => { setImportMode('full'); handleReset(); }}
+              className={`px-4 py-2 text-sm font-medium rounded-l-md border ${
+                importMode === 'full'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Full Item Data
+            </button>
+            <button
+              onClick={() => { setImportMode('summary'); handleReset(); }}
+              className={`px-4 py-2 text-sm font-medium rounded-r-md border-t border-r border-b ${
+                importMode === 'summary'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Summary Scores Only
+            </button>
+          </div>
+          <span className="text-xs text-gray-500">
+            {importMode === 'full'
+              ? 'Import complete item-level data (chartsMet, sampleSize, notes) from multi-sheet Excel files'
+              : 'Import just system scores from a simple spreadsheet'
+            }
+          </span>
+        </div>
+
+        {importMode === 'full' && (
+          <div className="mt-4 flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">Default Year:</label>
+            <input
+              type="number"
+              value={defaultYear}
+              onChange={(e) => setDefaultYear(parseInt(e.target.value) || new Date().getFullYear())}
+              className="w-24 px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              min="2000"
+              max={new Date().getFullYear()}
+            />
+            <span className="text-xs text-gray-500">
+              Used when year is not found in the file
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Progress Steps */}
@@ -177,29 +421,27 @@ export function HistoricalImport() {
       {/* Step 1: Upload */}
       {currentStep === 'upload' && (
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Upload Excel File</h2>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">
+            Upload Excel {importMode === 'full' ? 'Files' : 'File'}
+          </h2>
 
-          {/* Download Template Button */}
-          <div className="mb-6">
-            <button
-              onClick={handleDownloadTemplate}
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              Download Template
-            </button>
-            <p className="mt-2 text-sm text-gray-500">
-              Download the Excel template with correct column format and facility list
-            </p>
-          </div>
+          {importMode === 'summary' && (
+            <div className="mb-6">
+              <button
+                onClick={handleDownloadTemplate}
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download Template
+              </button>
+              <p className="mt-2 text-sm text-gray-500">
+                Download the Excel template with correct column format
+              </p>
+            </div>
+          )}
 
           {/* Drag and Drop Zone */}
           <div
@@ -216,7 +458,7 @@ export function HistoricalImport() {
             {loading ? (
               <div className="flex flex-col items-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="mt-4 text-sm text-gray-600">Processing file...</p>
+                <p className="mt-4 text-sm text-gray-600">Processing file(s)...</p>
               </div>
             ) : (
               <>
@@ -234,26 +476,215 @@ export function HistoricalImport() {
                   />
                 </svg>
                 <p className="mt-4 text-sm text-gray-600">
-                  Drag and drop your Excel file here, or{' '}
+                  Drag and drop your Excel file{importMode === 'full' ? '(s)' : ''} here, or{' '}
                   <label className="text-blue-600 hover:text-blue-500 cursor-pointer">
                     browse
                     <input
                       type="file"
                       className="hidden"
                       accept=".xlsx,.xls"
-                      onChange={(e) => handleFile(e.target.files[0])}
+                      multiple={importMode === 'full'}
+                      onChange={(e) => handleFiles(e.target.files)}
                     />
                   </label>
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Excel files only (.xlsx, .xls)</p>
+                <p className="mt-2 text-xs text-gray-500">
+                  {importMode === 'full'
+                    ? 'Upload multiple Excel files with full audit data (one per facility per month)'
+                    : 'Excel files only (.xlsx, .xls)'
+                  }
+                </p>
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* Step 2: Validate */}
-      {currentStep === 'validate' && validationResults && (
+      {/* Step 2: Validate - Full Mode */}
+      {currentStep === 'validate' && validationResults && importMode === 'full' && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">Validation Results</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {validationResults.valid} of {validationResults.total} files are valid
+              {validationResults.needsDateOverride > 0 && (
+                <span className="text-amber-600 ml-2">
+                  ({validationResults.needsDateOverride} need date info)
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex gap-8 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-sm text-gray-700">Valid: {validationResults.valid}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span className="text-sm text-gray-700">Invalid: {validationResults.invalid}</span>
+              </div>
+              {Object.keys(dateOverrides).length > 0 && (
+                <button
+                  onClick={revalidateWithOverrides}
+                  disabled={loading}
+                  className="ml-auto px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Revalidating...' : 'Apply Date Overrides'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="max-h-[32rem] overflow-auto">
+            <div className="divide-y divide-gray-200">
+              {validationResults.results.map((result, idx) => (
+                <div
+                  key={idx}
+                  className={`p-4 ${result.isValid ? 'bg-green-50' : result.needsDateOverride ? 'bg-amber-50' : 'bg-red-50'}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{result.filename}</div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {result.matchedFacility || result.facilityName || 'Unknown facility'}
+                        {result.matchScore && (
+                          <span className="text-xs text-gray-400 ml-1">
+                            ({(result.matchScore * 100).toFixed(0)}% match)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Date display or edit */}
+                      <div className="mt-2 flex items-center gap-2">
+                        {result.needsDateOverride || !result.isValid ? (
+                          <>
+                            <label className="text-xs text-gray-500">Month:</label>
+                            <select
+                              value={dateOverrides[result.filename]?.month || result.month || ''}
+                              onChange={(e) => handleDateOverride(result.filename, 'month', e.target.value)}
+                              className="px-2 py-1 text-sm border border-gray-300 rounded"
+                            >
+                              <option value="">--</option>
+                              {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <label className="text-xs text-gray-500 ml-2">Year:</label>
+                            <input
+                              type="number"
+                              value={dateOverrides[result.filename]?.year || result.year || ''}
+                              onChange={(e) => handleDateOverride(result.filename, 'year', e.target.value)}
+                              placeholder="2025"
+                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                              min="2020"
+                              max="2030"
+                            />
+                            {result.dateInferred && (
+                              <span className="text-xs text-amber-600">(year inferred)</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-700">
+                            {result.month}/{result.year}
+                            {result.dateSource === 'filename' && (
+                              <span className="text-xs text-gray-400 ml-1">(from filename)</span>
+                            )}
+                            {result.dateInferred && (
+                              <span className="text-xs text-amber-500 ml-1">(year inferred)</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      {result.totalScore !== undefined && (
+                        <div className="text-sm text-gray-500 mt-1">
+                          Score: {result.totalScore?.toFixed(1)} / {result.totalMaxPoints} ({result.scorePercentage}%)
+                          <span className="text-xs text-gray-400 ml-2">
+                            Format: {result.format}{result.kevType ? ` (${result.kevType})` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      result.isValid ? 'bg-green-100 text-green-800' :
+                      result.needsDateOverride ? 'bg-amber-100 text-amber-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {result.isValid ? 'Valid' : result.needsDateOverride ? 'Needs Date' : 'Invalid'}
+                    </span>
+                  </div>
+
+                  {/* System/Category breakdown */}
+                  {result.systems && result.systems.length > 0 && (
+                    <div className="mt-3 grid grid-cols-4 md:grid-cols-7 gap-2">
+                      {result.systems.map(sys => (
+                        <div key={sys.systemNumber} className="text-center bg-white/50 rounded p-1">
+                          <div className="text-xs text-gray-500 truncate" title={sys.systemName}>
+                            {result.format === 'kev' ? sys.systemName.substring(0, 8) : `S${sys.systemNumber}`}
+                          </div>
+                          <div className="text-sm font-medium">
+                            {sys.totalPointsEarned?.toFixed(0)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Errors */}
+                  {result.errors?.length > 0 && (
+                    <div className="mt-2">
+                      {result.errors.map((err, i) => (
+                        <div key={i} className="text-sm text-red-600">• {err}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Warnings */}
+                  {result.warnings?.length > 0 && (
+                    <div className="mt-2">
+                      {result.warnings.map((warn, i) => (
+                        <div key={i} className="text-sm text-amber-600">⚠ {warn}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between">
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Upload Different Files
+            </button>
+            <div className="flex gap-2">
+              {validationResults.needsDateOverride > 0 && Object.keys(dateOverrides).length > 0 && (
+                <button
+                  onClick={revalidateWithOverrides}
+                  disabled={loading}
+                  className="px-4 py-2 border border-blue-600 text-blue-600 rounded-md text-sm font-medium hover:bg-blue-50 disabled:opacity-50"
+                >
+                  Revalidate
+                </button>
+              )}
+              <button
+                onClick={handleProceedToConfirm}
+                disabled={validationResults.valid === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue with {validationResults.valid} Valid Files
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Validate - Summary Mode (existing) */}
+      {currentStep === 'validate' && validationResults && importMode === 'summary' && (
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Validation Results</h2>
@@ -262,7 +693,6 @@ export function HistoricalImport() {
             </p>
           </div>
 
-          {/* Summary */}
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="flex gap-8">
               <div className="flex items-center gap-2">
@@ -276,64 +706,39 @@ export function HistoricalImport() {
             </div>
           </div>
 
-          {/* Results Table */}
           <div className="max-h-96 overflow-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Row
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Facility
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Period
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Errors
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Row</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Facility</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {validationResults.rows.map((row) => (
-                  <tr
-                    key={row.row}
-                    className={row.isValid ? 'bg-green-50' : 'bg-red-50'}
-                  >
+                  <tr key={row.row} className={row.isValid ? 'bg-green-50' : 'bg-red-50'}>
                     <td className="px-4 py-3 text-sm text-gray-900">{row.row}</td>
                     <td className="px-4 py-3">
-                      {row.isValid ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                          Valid
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                          Invalid
-                        </span>
-                      )}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        row.isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {row.isValid ? 'Valid' : 'Invalid'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">{row.facilityName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {row.month}/{row.year}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{row.month}/{row.year}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{row.totalScore}</td>
-                    <td className="px-4 py-3 text-sm text-red-600">
-                      {row.errors.join('; ')}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-red-600">{row.errors.join('; ')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Actions */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between">
             <button
               onClick={handleReset}
@@ -366,44 +771,63 @@ export function HistoricalImport() {
               </h3>
               <p className="mt-1 text-sm text-blue-700">
                 These scorecards will be created with &quot;hard_close&quot; status and cannot be edited.
+                {importMode === 'full' && ' Full item-level data will be preserved.'}
               </p>
             </div>
 
-            {/* Preview of valid rows */}
             <h4 className="font-medium text-gray-900 mb-3">Scorecards to Import:</h4>
             <div className="max-h-64 overflow-auto border border-gray-200 rounded-lg">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Facility
+                      {importMode === 'full' ? 'File' : 'Facility'}
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Period
+                      {importMode === 'full' ? 'Facility' : 'Period'}
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Total Score
+                      {importMode === 'full' ? 'Period' : 'Total Score'}
                     </th>
+                    {importMode === 'full' && (
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Total Score
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {validationResults.rows
-                    .filter((r) => r.isValid)
-                    .map((row) => (
-                      <tr key={row.row}>
-                        <td className="px-4 py-2 text-sm text-gray-900">{row.facilityName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-900">
-                          {row.month}/{row.year}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-900">{row.totalScore}</td>
-                      </tr>
-                    ))}
+                  {importMode === 'full' ? (
+                    validationResults.results
+                      .filter((r) => r.isValid)
+                      .map((result, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-2 text-sm text-gray-900">{result.filename}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{result.matchedFacility}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            {result.month}/{result.year || defaultYear}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            {result.totalScore?.toFixed(1)}
+                          </td>
+                        </tr>
+                      ))
+                  ) : (
+                    validationResults.rows
+                      .filter((r) => r.isValid)
+                      .map((row) => (
+                        <tr key={row.row}>
+                          <td className="px-4 py-2 text-sm text-gray-900">{row.facilityName}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{row.month}/{row.year}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{row.totalScore}</td>
+                        </tr>
+                      ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Actions */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between">
             <button
               onClick={() => setCurrentStep('validate')}
@@ -434,49 +858,31 @@ export function HistoricalImport() {
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">Importing scorecards...</p>
-                <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full animate-pulse w-1/2"></div>
-                </div>
               </div>
             ) : importResults ? (
               <div className="text-center">
                 {importResults.success > 0 ? (
                   <>
                     <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                      <svg
-                        className="h-6 w-6 text-green-600"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
+                      <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
                     <h3 className="mt-4 text-lg font-medium text-gray-900">Import Complete</h3>
                     <p className="mt-2 text-gray-600">
                       Successfully imported {importResults.success} scorecards
                     </p>
+                    {importResults.batchId && (
+                      <p className="mt-1 text-sm text-gray-500">
+                        Batch ID: {importResults.batchId}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
                     <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                      <svg
-                        className="h-6 w-6 text-red-600"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
+                      <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </div>
                     <h3 className="mt-4 text-lg font-medium text-gray-900">Import Failed</h3>
@@ -486,12 +892,12 @@ export function HistoricalImport() {
                 {importResults.failed > 0 && (
                   <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 text-left">
                     <p className="text-sm font-medium text-red-800">
-                      {importResults.failed} rows failed to import:
+                      {importResults.failed} {importMode === 'full' ? 'files' : 'rows'} failed to import:
                     </p>
                     <ul className="mt-2 text-sm text-red-600 list-disc list-inside">
                       {importResults.errors.slice(0, 10).map((err, i) => (
                         <li key={i}>
-                          Row {err.row}: {err.error}
+                          {err.filename || `Row ${err.row}`}: {err.error}
                         </li>
                       ))}
                       {importResults.errors.length > 10 && (

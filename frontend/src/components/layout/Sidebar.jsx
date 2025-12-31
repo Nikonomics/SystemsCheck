@@ -10,6 +10,7 @@ import {
   Activity,
   Brain,
   BarChart3,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -25,6 +26,7 @@ const navigation = [
 const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Audit Template', href: '/admin/template', icon: FileEdit },
+  { name: 'Historical Import', href: '/admin/import', icon: Upload },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];

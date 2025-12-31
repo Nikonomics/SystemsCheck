@@ -1,38 +1,64 @@
 # SystemsCheck - Project Context
 
 ## Project Overview
+
 **SystemsCheck** is a clinical audit scorecard system for Skilled Nursing Facilities (SNFs), Assisted Living Facilities (ALFs), and Independent Living Facilities (ILFs). It enables monthly clinical audits based on 8 clinical systems with standardized scoring, multi-level organizational hierarchy, role-based access control, and comprehensive reporting.
 
 ## Current Status
-**Phase**: Active Development - Audit Criteria Alignment
-- Core application functional (authentication, scorecards, facilities, reports)
-- Auditing `auditCriteria.js` against source Excel spreadsheet
-- Systems 1, 2, 7, and 8 have been audited and corrected
-- Systems 3-6 still need to be audited
-- Data model enhanced for per-system auditor tracking (pending DB migration)
-- Frontend section headers implemented for Systems 2 and 4
 
-## Tech Stack
+**Phase**: Production - Active Development
+- Core application fully functional (authentication, scorecards, facilities, reports)
+- Historical import system operational
+- Survey Intelligence with CMS data integration
+- Deployed on Render with auto-deploy from GitHub
 
-### Backend
-- **Node.js** with Express.js
-- **Sequelize ORM** with PostgreSQL 14+
-- **JWT** authentication with bcryptjs
-- Runs on port 3002
+## Architecture Overview
 
-### Frontend
-- **React 19** with Vite
-- **React Router v7** for navigation
-- **Tailwind CSS** for styling
-- **Axios** for API calls
-- **ReCharts** for visualizations
-- **@react-pdf/renderer** for PDF export
+### Multi-Database Design
+
+SystemsCheck uses two PostgreSQL databases:
+
+1. **SystemsCheck Database** (local/Render)
+   - Companies, Teams, Facilities, Users
+   - Scorecards, Systems, Items, Residents
+   - Import batches, Audit templates
+   - Connection: `DATABASE_URL`
+
+2. **Market Database** (shared, read-only)
+   - CMS facility data (`snf_facilities`)
+   - Historical snapshots (`facility_snapshots`, `cms_extracts`)
+   - Deficiencies, citations, quality measures
+   - Connection: `MARKET_DATABASE_URL`
+
+```
+┌─────────────────────┐     ┌─────────────────────┐
+│  SystemsCheck DB    │     │  Market DB          │
+│  (Render/Local)     │     │  (snf_market_data)  │
+├─────────────────────┤     ├─────────────────────┤
+│ companies           │     │ snf_facilities      │
+│ teams               │     │ facility_snapshots  │
+│ facilities ─────────┼──→  │ cms_extracts        │
+│ users               │ CCN │ cms_facility_defic. │
+│ scorecards          │     │ fire_safety_citat.  │
+│ import_batches      │     │ quality_measures    │
+└─────────────────────┘     └─────────────────────┘
+```
+
+### Tech Stack
+
+**Backend**
+- Node.js with Express.js
+- Sequelize ORM with PostgreSQL
+- JWT authentication with bcryptjs
+- Runs on port 3001
+
+**Frontend**
+- React 19 with Vite
+- React Router v7
+- Tailwind CSS
+- Recharts for visualizations
+- @react-pdf/renderer for exports
 - Runs on port 5173
-
-### Database
-- PostgreSQL with Sequelize ORM
-- Uses `sequelize.sync()` (not migrations)
-- Seed script at `backend/src/seeds/seed.js`
 
 ## File Structure
 
@@ -41,72 +67,122 @@ systemscheck/
 ├── backend/
 │   ├── src/
 │   │   ├── config/
-│   │   │   └── database.js           # Sequelize PostgreSQL config
-│   │   ├── models/                    # 14 Sequelize models
+│   │   │   ├── database.js         # Local Sequelize config
+│   │   │   └── marketDatabase.js   # Market DB connection pool
+│   │   ├── data/
+│   │   │   └── auditCriteria.js    # 8 clinical systems definition
+│   │   ├── database/
+│   │   │   └── survey_intelligence_schema.sql
+│   │   ├── middleware/
+│   │   │   └── auth.js             # JWT & role authorization
+│   │   ├── migrations/
+│   │   │   └── 20241230-add-import-batches.js
+│   │   ├── models/                  # 18 Sequelize models
 │   │   │   ├── Company.js
 │   │   │   ├── Team.js
 │   │   │   ├── Facility.js
 │   │   │   ├── User.js
-│   │   │   ├── UserFacility.js        # Many-to-many junction
+│   │   │   ├── UserFacility.js
 │   │   │   ├── Scorecard.js
-│   │   │   ├── ScorecardSystem.js     # 7 systems per scorecard
-│   │   │   ├── ScorecardItem.js       # Individual audit items
-│   │   │   ├── ScorecardResident.js   # Resident samples (per-system)
+│   │   │   ├── ScorecardSystem.js
+│   │   │   ├── ScorecardItem.js
+│   │   │   ├── ScorecardResident.js
 │   │   │   ├── ScorecardActivityLog.js
-│   │   │   ├── AuditTemplate.js       # Reusable audit templates
-│   │   │   ├── AuditTemplateSystem.js # Systems within a template
-│   │   │   ├── AuditTemplateItem.js   # Items within a template system
-│   │   │   └── index.js               # Model associations
-│   │   ├── routes/                    # 7 API route modules
+│   │   │   ├── AuditTemplate.js
+│   │   │   ├── AuditTemplateSystem.js
+│   │   │   ├── AuditTemplateItem.js
+│   │   │   ├── ImportBatch.js
+│   │   │   ├── SurveyIntelligence.js
+│   │   │   ├── KevHistorical.js
+│   │   │   ├── KevHistoricalCategory.js
+│   │   │   └── index.js            # Model associations
+│   │   ├── routes/                  # 12 API route modules
 │   │   │   ├── auth.js
 │   │   │   ├── users.js
 │   │   │   ├── scorecards.js
 │   │   │   ├── facilities.js
 │   │   │   ├── reports.js
 │   │   │   ├── organization.js
-│   │   │   └── import.js
-│   │   ├── middleware/
-│   │   │   └── auth.js                # JWT & role authorization
-│   │   ├── data/
-│   │   │   └── auditCriteria.js       # 8 clinical systems definition
-│   │   ├── utils/
-│   │   │   └── scoring.js             # Score calculation logic
+│   │   │   ├── import.js           # Historical import
+│   │   │   ├── template.js
+│   │   │   ├── cmsData.js          # CMS data + trends
+│   │   │   ├── surveyIntel.js      # Facility intelligence
+│   │   │   ├── surveyIntelTeam.js  # Team intelligence
+│   │   │   └── surveyIntelligence.js
+│   │   ├── scripts/
+│   │   │   ├── seedProduction.js   # Production seed script
+│   │   │   ├── syncSnfFacilities.js
+│   │   │   ├── analyzeScoreCards.js
+│   │   │   ├── formatsByCompany.js
+│   │   │   └── ...                 # Analysis utilities
 │   │   ├── seeds/
-│   │   │   └── seed.js                # Database seeding
-│   │   └── index.js                   # Express entry point
+│   │   │   └── seed.js
+│   │   ├── services/
+│   │   │   └── surveyIntelligenceCalculator.js
+│   │   ├── utils/
+│   │   │   ├── excelParser.js      # Excel scorecard parser
+│   │   │   ├── kevParser.js        # KEV format parser
+│   │   │   └── dateExtractor.js
+│   │   └── index.js                # Express entry point
 │   └── package.json
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                       # API client modules
+│   │   ├── api/                    # API client modules
+│   │   │   ├── authService.js
+│   │   │   ├── facilityService.js
+│   │   │   ├── scorecardService.js
+│   │   │   ├── cmsService.js
+│   │   │   └── import.js
 │   │   ├── components/
-│   │   │   ├── layout/                # Header, Sidebar, Layout
-│   │   │   └── ui/                    # Reusable UI components
+│   │   │   ├── CMSTabs/            # CMS data display
+│   │   │   │   ├── TrendsTab/      # Rating/staffing trends
+│   │   │   │   ├── QualityTab/
+│   │   │   │   ├── StaffingTab/
+│   │   │   │   └── DeficienciesTab/
+│   │   │   ├── layout/
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   │   └── Layout.jsx
+│   │   │   ├── survey-intelligence/
+│   │   │   │   ├── ScoreCard.jsx
+│   │   │   │   ├── MetricBar.jsx
+│   │   │   │   ├── GapAnalysis.jsx
+│   │   │   │   ├── OperationalContext.jsx
+│   │   │   │   ├── ChainContext.jsx
+│   │   │   │   ├── RecommendationsPanel.jsx
+│   │   │   │   └── SurveyIntelligenceCard.jsx
+│   │   │   └── ui/
 │   │   ├── context/
-│   │   │   └── AuthContext.jsx        # Global auth state
+│   │   │   └── AuthContext.jsx
 │   │   ├── pages/
 │   │   │   ├── dashboard/
 │   │   │   ├── facilities/
+│   │   │   │   ├── FacilityList.jsx
+│   │   │   │   ├── FacilityDetail.jsx
+│   │   │   │   └── FacilitySurveyIntelligence.jsx
 │   │   │   ├── scorecards/
-│   │   │   │   ├── ScorecardForm.jsx  # Main scorecard entry
+│   │   │   │   ├── ScorecardForm.jsx
 │   │   │   │   ├── ScorecardView.jsx
-│   │   │   │   ├── ScorecardPDF.jsx
-│   │   │   │   └── components/
-│   │   │   │       ├── SystemTab.jsx  # System form with sections
-│   │   │   │       ├── SummaryTab.jsx # Score overview
-│   │   │   │       ├── AuditItemRow.jsx
-│   │   │   │       └── ResidentsSection.jsx
-│   │   │   ├── reports/
+│   │   │   │   └── ScorecardPDF.jsx
+│   │   │   ├── survey-intelligence/
 │   │   │   ├── admin/
-│   │   │   └── profile/
-│   │   ├── App.jsx                    # Main routing
+│   │   │   │   └── HistoricalImport.jsx
+│   │   │   └── reports/
+│   │   ├── utils/
+│   │   │   ├── scorecardParser.js
+│   │   │   ├── excelFullParser.js
+│   │   │   └── kevParser.js
+│   │   ├── App.jsx
 │   │   └── main.jsx
 │   └── package.json
 │
-├── CONTEXT.md                         # This file
-├── PROJECT_LOG.md                     # Action log
-├── TODO.md                            # Task list
-└── .claudemd                          # Claude project rules
+├── clinical_systems_docs/          # Clinical systems reference
+├── focus_areas/                    # Focus areas implementation
+├── CONTEXT.md                      # This file
+├── README.md                       # Setup & API docs
+├── render.yaml                     # Render deployment
+└── .claudemd                       # Claude project rules
 ```
 
 ## Key Architecture Decisions
@@ -139,115 +215,65 @@ draft → trial_close → hard_close
 - Trial Close: Review period (can reopen)
 - Hard Close: Permanent record (cannot edit/delete)
 
-### 5. Per-System Tracking
-Each system tab can have:
-- Different auditor (completedById, completedAt) - *model added, DB migration pending*
-- Different residents reviewed (ScorecardResident links to ScorecardSystem)
-- System-specific notes
+### 5. CMS Data Integration
+- Facilities linked to CMS via CCN (federal_provider_number)
+- Historical snapshots from 2020-present (62+ months)
+- Trends data: ratings, staffing, turnover, occupancy, deficiencies
+- Read-only access to shared market database
 
-### 6. Scoring Calculation
-```javascript
-Points Earned = (Maximum Points / Sample Size) × Charts Met
-```
-- Binary items: Full points if yes, 0 if no
-- Sample items: Proportional scoring based on charts met
+### 6. Historical Import System
+- Supports multiple Excel formats:
+  - **Clinical Systems Review**: Full 8-system scorecard
+  - **KEV Hybrid**: Condensed format with categories
+  - **KEV Mini**: Minimal format
+- Automatic format detection
+- Fuzzy facility name matching
+- Batch tracking with rollback capability
 
-### 7. Audit Templates (New)
-```
-AuditTemplate → AuditTemplateSystem → AuditTemplateItem
-```
-- Allows creating reusable/customizable audit templates
-- Templates can be versioned and modified without affecting existing scorecards
-- Tracks createdBy and updatedBy for audit trail
-- Cascading deletes: Deleting a template removes all systems and items
+### 7. Survey Intelligence
+- **Survey Risk Score**: Composite of lagging + leading indicators
+- **Operational Context**: Capacity strain, resource scores, quadrant classification
+- **Alert Flags**: Critical issues requiring attention
+- **Recommendations**: Actionable next steps
+- **Chain Context**: Comparison to chain averages
 
-### 8. Survey Intelligence Framework
-See `18_Survey_Intelligence_Architecture.md` for the complete framework:
-- **Survey Analytics** = Raw data ("What happened?")
-- **Survey Intelligence** = Actionable insights ("What should I do?")
-- **Views** = Benchmarks (Market → Company → Team → Facility)
+## Important Notes
 
-Always reference this document when building Survey Intelligence features.
+### External Database Queries
+Before writing SQL against the market database:
+1. Check the Data Dictionary: `/Users/nikolashulewsky/Desktop/17_Data_Dictionary.md`
+2. Use `getMarketPool()` from `config/marketDatabase.js`
+3. Never guess column names - query `information_schema` if unsure
 
-## Important Notes & Gotchas
-
-### 1. Audit Criteria Source of Truth
-Excel file: `/Users/nikolashulewsky/Desktop/2025 Clinical Systems Review Template 9-21-25.xlsx`
-All `auditCriteria.js` content must match this file exactly.
-
-### 2. Database Sync vs Migrations
-Project uses `sequelize.sync()` not migrations. To add columns:
-- Option A: Re-run seed script (drops all data)
-- Option B: Manual SQL: `ALTER TABLE scorecard_systems ADD COLUMN...`
-
-### 3. Section Headers
-Defined in two places that must stay in sync:
-- `auditCriteria.js`: `sections` array with names and item ranges
-- `SystemTab.jsx`: `systemSections` object for UI rendering
-
-### 4. completedBy Feature (Pending)
-Model fields added but:
-- Database columns not created yet
-- API include commented out to prevent 500 errors
-- Uncomment in `scorecards.js` after running ALTER TABLE
-
-### 5. Port Configuration
-- Backend: http://localhost:3002
-- Frontend: http://localhost:5173
-
-### 6. Summary Tab Bug (Fixed)
-Was showing 800 max points, fixed to 700 (7 scored systems × 100)
-
-## Recent Significant Changes
-
-### Session: 2025-12-25
-1. **System 1 Audited**: Updated all item text to match Excel exactly
-2. **System 2 Audited**: Fixed text, added pageDescription, environmentalFocuses, sections
-3. **System 7 Audited**: (by other chat) Updated to match Excel
-4. **System 8 Audited**: Updated all 14 observation items to match Excel exactly
-5. **Frontend Section Headers**: Added to SystemTab.jsx for Systems 2 and 4
-6. **Per-System Auditor Model**: Added completedById/completedAt to ScorecardSystem
-7. **Summary Tab Fix**: Changed max score from 800 to 700
-
-## Current Priorities
-
-### In Progress
-1. Audit Systems 3-6 against Excel spreadsheet
-
-### Next Steps
-1. Run database migration for completedById/completedAt columns
-2. Enable completedBy in API after migration
-3. Build Scorecards list page (currently placeholder)
-4. Add section headers for other systems as needed
-
-## Active Blockers
-- **completedBy API**: Commented out until DB columns added
-
-## Development Rules
-
-### External Database Queries (snf_market_data)
-Before writing ANY SQL query against the external snf_market_data database:
-1. **Check the Data Dictionary first**: `/Users/nikolashulewsky/Desktop/17_Data_Dictionary.md`
-2. **If column isn't documented**, query information_schema:
-   ```sql
-   SELECT column_name FROM information_schema.columns
-   WHERE table_name = 'table_name' AND column_name LIKE '%keyword%';
-   ```
-3. **Never guess column names** - they often differ from expectations (e.g., `federal_provider_number` not `ccn`, `sprinkler_status` may be named differently)
-4. **Update the Data Dictionary** when you discover new columns
-
-### Known Column Name Gotchas
+### Known Column Name Mappings
 | Expected | Actual Column | Table |
 |----------|---------------|-------|
 | `ccn` | `federal_provider_number` | snf_facilities |
-| `sprinkler_status` | `has_sprinkler_system` | snf_facilities |
-| `scope_severity` | `scope_severity_code` | fire_safety_citations |
 | `state` | Must JOIN from snf_facilities | cms_facility_deficiencies |
 
 ### Critical Tables for Survey Intelligence
-- **snf_facilities**: 101 columns - facility demographics, ratings, staffing, penalties
-- **cms_facility_deficiencies**: 15 columns - health survey deficiencies
-- **fire_safety_citations**: 17 columns - life safety code deficiencies
+- **snf_facilities**: Facility demographics, ratings, staffing, penalties
+- **facility_snapshots**: Monthly historical data (ratings, staffing, turnover)
+- **cms_extracts**: Extract dates for snapshots
+- **cms_facility_deficiencies**: Health survey deficiencies
+- **fire_safety_citations**: Life safety code deficiencies
+
+## Deployment
+
+### Render Services
+- **systemscheck-api**: Node.js backend
+- **systemscheck-web**: Static frontend
+- **systemscheck-db**: PostgreSQL database
+
+### Environment Variables on Render
+- `DATABASE_URL`: SystemsCheck database (auto-set by Render)
+- `MARKET_DATABASE_URL`: Shared CMS data (manual config)
+- `JWT_SECRET`: Authentication secret
+- `CORS_ORIGIN`: Frontend URL
+
+### Build Commands
+- Backend: `npm install && npm run db:seed-prod`
+- Frontend: `npm install && npm run build`
 
 ---
-*Last Updated: 2025-12-26*
+*Last Updated: 2025-12-31*

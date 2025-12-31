@@ -16,7 +16,8 @@ const {
   UserFacility,
   AuditTemplate,
   AuditTemplateSystem,
-  AuditTemplateItem
+  AuditTemplateItem,
+  ImportBatch
 } = require('../models');
 const { getScoredSystems } = require('../data/auditCriteria');
 
@@ -153,6 +154,9 @@ async function seedProduction() {
     await AuditTemplate.sync({ alter: true });
     await AuditTemplateSystem.sync({ alter: true });
     await AuditTemplateItem.sync({ alter: true });
+
+    // ImportBatch must be synced before Scorecard (foreign key dependency)
+    await ImportBatch.sync({ alter: true });
 
     // Also need scorecard tables
     const { Scorecard, ScorecardSystem, ScorecardItem } = require('../models');

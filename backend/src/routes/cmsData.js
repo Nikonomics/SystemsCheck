@@ -9,7 +9,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getMarketPool, getSNFalyzePool } = require('../config/marketDatabase');
+const { getMarketPool } = require('../config/marketDatabase');
 
 // ============================================================================
 // FACILITY SEARCH
@@ -239,14 +239,13 @@ router.get('/snf/:ccn', async (req, res) => {
     `, [ccn]);
     facility.total_fire_deficiencies = parseInt(fireDeficiencyResult.rows[0]?.count || 0);
 
-    // Get historical snapshots from SNFalyze database (has trends data from 2020-present)
+    // Get historical snapshots from market database (has trends data from 2020-present)
     // IMPORTANT: Use the LATEST snapshot for current data since snf_facilities may be stale
     let snapshots = [];
-    const snfalyzePool = getSNFalyzePool();
 
-    if (snfalyzePool) {
+    if (pool) {
       try {
-        const snapshotsResult = await snfalyzePool.query(`
+        const snapshotsResult = await pool.query(`
           SELECT
             e.extract_date,
             fs.overall_rating,
@@ -1012,10 +1011,9 @@ router.get('/snf/:ccn/percentiles', async (req, res) => {
     const facility = facilityResult.rows[0];
 
     // Get latest snapshot data to overlay on stale snf_facilities values
-    const snfalyzePool = getSNFalyzePool();
-    if (snfalyzePool) {
+    if (pool) {
       try {
-        const latestSnapshotResult = await snfalyzePool.query(`
+        const latestSnapshotResult = await pool.query(`
           SELECT
             fs.overall_rating,
             fs.qm_rating,

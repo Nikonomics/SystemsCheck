@@ -6,9 +6,9 @@ const sequelize = require('../config/database');
 
 const router = express.Router();
 
-// All routes require authentication and admin role
+// All routes require authentication (admin and corporate roles have access)
 router.use(authenticateToken);
-router.use(authorizeRoles('admin'));
+router.use(authorizeRoles('admin', 'corporate'));
 
 // ============================================
 // COMPANIES

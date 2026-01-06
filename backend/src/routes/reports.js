@@ -12,6 +12,7 @@ const {
   ScorecardItem,
   UserFacility,
   User,
+  KevHistorical,
 } = require('../models');
 
 // Helper to get date range filter
@@ -46,6 +47,75 @@ function calculateScoreFromItems(items) {
     const points = (item.maxPoints / item.sampleSize) * item.chartsMet;
     return sum + Math.min(points, item.maxPoints);
   }, 0);
+}
+
+/**
+ * Helper to get completed months for facilities including both scorecards and KEV historical
+ * Returns a Set of unique "facilityId-month-year" keys representing completed audits
+ */
+async function getCompletedAudits(facilityIds, dateFilter) {
+  const completedSet = new Set();
+
+  // Get completed scorecards
+  const scorecards = await Scorecard.findAll({
+    where: {
+      facilityId: { [Op.in]: facilityIds },
+      status: 'hard_close',
+      [Op.or]: [
+        { year: { [Op.gt]: dateFilter.startYear } },
+        {
+          year: dateFilter.startYear,
+          month: { [Op.gte]: dateFilter.startMonth },
+        },
+      ],
+    },
+    attributes: ['facilityId', 'month', 'year'],
+  });
+
+  scorecards.forEach(sc => {
+    completedSet.add(`${sc.facilityId}-${sc.month}-${sc.year}`);
+  });
+
+  // Get KEV historical records
+  const kevRecords = await KevHistorical.findAll({
+    where: {
+      facilityId: { [Op.in]: facilityIds },
+      [Op.or]: [
+        { year: { [Op.gt]: dateFilter.startYear } },
+        {
+          year: dateFilter.startYear,
+          month: { [Op.gte]: dateFilter.startMonth },
+        },
+      ],
+    },
+    attributes: ['facilityId', 'month', 'year'],
+  });
+
+  kevRecords.forEach(kev => {
+    completedSet.add(`${kev.facilityId}-${kev.month}-${kev.year}`);
+  });
+
+  return completedSet;
+}
+
+/**
+ * Helper to count unique completed months per facility
+ * Returns object { facilityId: count } for completed months
+ */
+async function getCompletedMonthCounts(facilityIds, dateFilter) {
+  const completedSet = await getCompletedAudits(facilityIds, dateFilter);
+  const counts = {};
+
+  facilityIds.forEach(id => { counts[id] = 0; });
+
+  completedSet.forEach(key => {
+    const facilityId = parseInt(key.split('-')[0]);
+    if (counts[facilityId] !== undefined) {
+      counts[facilityId]++;
+    }
+  });
+
+  return counts;
 }
 
 // Helper to get user's team/company from their assigned facilities
@@ -140,7 +210,7 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
 
     let dashboardData = {};
 
-    if (user.role === 'clinical_resource') {
+    if (user.role === 'clinical_resource' || user.role === 'facility_leader') {
       // Get assigned facilities
       const assignments = await UserFacility.findAll({
         where: { userId: user.id },
@@ -223,7 +293,7 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
       });
 
       dashboardData = {
-        role: 'clinical_resource',
+        role: user.role, // Returns 'clinical_resource' or 'facility_leader'
         myFacilities,
         dueThisMonth,
         recentActivity: recentActivity.map(sc => ({
@@ -655,6 +725,9 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
       attributes: ['id', 'facilityId', 'month', 'year', 'totalScore'],
     });
 
+    // Get completed audits including KEV historical
+    const completedAudits = await getCompletedAudits(allFacilityIds, dateFilter);
+
     // Calculate stats per team
     const teamData = teams.map(team => {
       const teamFacilityIds = team.facilities?.map(f => f.id) || [];
@@ -666,8 +739,18 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
 
       // Calculate expected scorecards (facilities * months in range)
       const expectedCount = teamFacilityIds.length * dateFilter.monthsBack;
+
+      // Count completed audits for this team (including KEV historical)
+      let completedCount = 0;
+      completedAudits.forEach(key => {
+        const facilityId = parseInt(key.split('-')[0]);
+        if (teamFacilityIds.includes(facilityId)) {
+          completedCount++;
+        }
+      });
+
       const completionRate = expectedCount > 0
-        ? Math.round((teamScorecards.length / expectedCount) * 100)
+        ? Math.round((completedCount / expectedCount) * 100)
         : 0;
 
       // Calculate trend (compare first half to second half of period)
@@ -696,7 +779,7 @@ router.get('/reports/teams', authenticateToken, async (req, res) => {
           name: team.company?.name,
         },
         facilityCount: teamFacilityIds.length,
-        scorecardCount: teamScorecards.length,
+        scorecardCount: completedCount, // Now includes KEV historical
         avgScore,
         completionRate,
         trend,
@@ -782,6 +865,9 @@ router.get('/reports/companies', authenticateToken, async (req, res) => {
       attributes: ['id', 'facilityId', 'totalScore'],
     });
 
+    // Get completed audits including KEV historical
+    const completedAudits = await getCompletedAudits(allFacilityIds, dateFilter);
+
     // Calculate stats per company
     const companyData = companies.map(company => {
       const companyFacilityIds = company.teams?.flatMap(t => t.facilities?.map(f => f.id) || []) || [];
@@ -792,8 +878,18 @@ router.get('/reports/companies', authenticateToken, async (req, res) => {
         : null;
 
       const expectedCount = companyFacilityIds.length * dateFilter.monthsBack;
+
+      // Count completed audits for this company (including KEV historical)
+      let completedCount = 0;
+      completedAudits.forEach(key => {
+        const facilityId = parseInt(key.split('-')[0]);
+        if (companyFacilityIds.includes(facilityId)) {
+          completedCount++;
+        }
+      });
+
       const completionRate = expectedCount > 0
-        ? Math.round((companyScorecards.length / expectedCount) * 100)
+        ? Math.round((completedCount / expectedCount) * 100)
         : 0;
 
       // Trend calculation
@@ -819,7 +915,7 @@ router.get('/reports/companies', authenticateToken, async (req, res) => {
         name: company.name,
         teamCount: company.teams?.length || 0,
         facilityCount: companyFacilityIds.length,
-        scorecardCount: companyScorecards.length,
+        scorecardCount: completedCount, // Now includes KEV historical
         avgScore,
         completionRate,
         trend,
@@ -1100,6 +1196,281 @@ router.get('/reports/systems', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching system analysis:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * GET /api/reports/company-trends
+ * Get monthly trend data for all companies (for Corporate dashboard)
+ * Query params: months (default 12)
+ */
+router.get('/reports/company-trends', authenticateToken, async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 12;
+    const now = new Date();
+
+    // Calculate start date
+    const startDate = new Date(now);
+    startDate.setMonth(startDate.getMonth() - months + 1);
+    const startMonth = startDate.getMonth() + 1;
+    const startYear = startDate.getFullYear();
+
+    // Get all companies with their facilities
+    const companies = await Company.findAll({
+      include: [{
+        model: Team,
+        as: 'teams',
+        include: [{
+          model: Facility,
+          as: 'facilities',
+          where: { isActive: true },
+          required: false,
+        }],
+      }],
+    });
+
+    // Get all facility IDs for querying
+    const allFacilityIds = companies.flatMap(c =>
+      c.teams.flatMap(t => t.facilities.map(f => f.id))
+    );
+
+    // Get all relevant scorecards
+    const scorecards = await Scorecard.findAll({
+      where: {
+        status: 'hard_close',
+        [Op.or]: [
+          { year: { [Op.gt]: startYear } },
+          { year: startYear, month: { [Op.gte]: startMonth } },
+        ],
+      },
+      include: [{
+        model: Facility,
+        as: 'facility',
+        attributes: ['id', 'teamId'],
+        include: [{
+          model: Team,
+          as: 'team',
+          attributes: ['id', 'companyId'],
+        }],
+      }],
+    });
+
+    // Get KEV historical records for completion tracking
+    const kevRecords = await KevHistorical.findAll({
+      where: {
+        facilityId: { [Op.in]: allFacilityIds },
+        [Op.or]: [
+          { year: { [Op.gt]: startYear } },
+          { year: startYear, month: { [Op.gte]: startMonth } },
+        ],
+      },
+      attributes: ['facilityId', 'month', 'year'],
+    });
+
+    // Build month list
+    const monthList = [];
+    for (let i = 0; i < months; i++) {
+      const d = new Date(startDate);
+      d.setMonth(startDate.getMonth() + i);
+      monthList.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      });
+    }
+
+    // Colors for companies
+    const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+
+    // Process data per company
+    const companyTrends = companies.map((company, idx) => {
+      const facilityIds = company.teams.flatMap(t => t.facilities.map(f => f.id));
+
+      const monthlyData = monthList.map(m => {
+        const monthScorecards = scorecards.filter(sc =>
+          sc.month === m.month &&
+          sc.year === m.year &&
+          facilityIds.includes(sc.facilityId)
+        );
+
+        // Get completed facilities for this month (including KEV historical)
+        const completedFacilities = new Set();
+        monthScorecards.forEach(sc => completedFacilities.add(sc.facilityId));
+        kevRecords
+          .filter(kev => kev.month === m.month && kev.year === m.year && facilityIds.includes(kev.facilityId))
+          .forEach(kev => completedFacilities.add(kev.facilityId));
+
+        const totalScore = monthScorecards.reduce((sum, sc) => sum + (parseFloat(sc.totalScore) || 0), 0);
+        const avgScore = monthScorecards.length > 0 ? Math.round(totalScore / monthScorecards.length) : null;
+        const completionPct = facilityIds.length > 0
+          ? Math.round((completedFacilities.size / facilityIds.length) * 100)
+          : 0;
+
+        return {
+          month: m.key,
+          avgScore,
+          completionPct,
+          scorecardCount: monthScorecards.length,
+          facilityCount: facilityIds.length,
+        };
+      });
+
+      return {
+        id: company.id,
+        name: company.name,
+        color: COLORS[idx % COLORS.length],
+        data: monthlyData,
+      };
+    });
+
+    res.json({ companies: companyTrends, months: monthList.map(m => m.key) });
+  } catch (error) {
+    console.error('Error fetching company trends:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * GET /api/reports/team-trends
+ * Get monthly trend data for teams (for Company Leader dashboard)
+ * Query params: companyId (required), months (default 12)
+ */
+router.get('/reports/team-trends', authenticateToken, async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const months = parseInt(req.query.months) || 12;
+    const user = req.user;
+
+    // Determine which company to query
+    let targetCompanyId = companyId ? parseInt(companyId) : null;
+
+    // For company_leader, derive from assigned facilities
+    if (!targetCompanyId && user.role === 'company_leader') {
+      const userContext = await getUserTeamAndCompany(user.id);
+      targetCompanyId = userContext.companyId;
+    }
+
+    // For admin/corporate without a specific company, get all teams
+    const showAllTeams = !targetCompanyId && ['admin', 'corporate'].includes(user.role);
+
+    // If not admin/corporate and no company ID, return error
+    if (!showAllTeams && !targetCompanyId) {
+      return res.status(400).json({ message: 'Company ID required' });
+    }
+
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setMonth(startDate.getMonth() - months + 1);
+    const startMonth = startDate.getMonth() + 1;
+    const startYear = startDate.getFullYear();
+
+    // Get teams (all teams for admin/corporate, or filtered by company)
+    const teamWhere = showAllTeams ? {} : { companyId: targetCompanyId };
+    const teams = await Team.findAll({
+      where: teamWhere,
+      include: [
+        { model: Company, as: 'company', attributes: ['id', 'name'] },
+        {
+          model: Facility,
+          as: 'facilities',
+          where: { isActive: true },
+          required: false,
+        },
+      ],
+    });
+
+    // Get all relevant scorecards
+    const teamIds = teams.map(t => t.id);
+    const facilityIds = teams.flatMap(t => t.facilities.map(f => f.id));
+
+    const scorecards = await Scorecard.findAll({
+      where: {
+        facilityId: { [Op.in]: facilityIds },
+        status: 'hard_close',
+        [Op.or]: [
+          { year: { [Op.gt]: startYear } },
+          { year: startYear, month: { [Op.gte]: startMonth } },
+        ],
+      },
+      include: [{
+        model: Facility,
+        as: 'facility',
+        attributes: ['id', 'teamId'],
+      }],
+    });
+
+    // Get KEV historical records for completion tracking
+    const kevRecords = await KevHistorical.findAll({
+      where: {
+        facilityId: { [Op.in]: facilityIds },
+        [Op.or]: [
+          { year: { [Op.gt]: startYear } },
+          { year: startYear, month: { [Op.gte]: startMonth } },
+        ],
+      },
+      attributes: ['facilityId', 'month', 'year'],
+    });
+
+    // Build month list
+    const monthList = [];
+    for (let i = 0; i < months; i++) {
+      const d = new Date(startDate);
+      d.setMonth(startDate.getMonth() + i);
+      monthList.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      });
+    }
+
+    // Colors for teams
+    const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
+
+    // Process data per team
+    const teamTrends = teams.map((team, idx) => {
+      const teamFacilityIds = team.facilities.map(f => f.id);
+
+      const monthlyData = monthList.map(m => {
+        const monthScorecards = scorecards.filter(sc =>
+          sc.month === m.month &&
+          sc.year === m.year &&
+          teamFacilityIds.includes(sc.facilityId)
+        );
+
+        // Get completed facilities for this month (including KEV historical)
+        const completedFacilities = new Set();
+        monthScorecards.forEach(sc => completedFacilities.add(sc.facilityId));
+        kevRecords
+          .filter(kev => kev.month === m.month && kev.year === m.year && teamFacilityIds.includes(kev.facilityId))
+          .forEach(kev => completedFacilities.add(kev.facilityId));
+
+        const totalScore = monthScorecards.reduce((sum, sc) => sum + (parseFloat(sc.totalScore) || 0), 0);
+        const avgScore = monthScorecards.length > 0 ? Math.round(totalScore / monthScorecards.length) : null;
+        const completionPct = teamFacilityIds.length > 0
+          ? Math.round((completedFacilities.size / teamFacilityIds.length) * 100)
+          : 0;
+
+        return {
+          month: m.key,
+          avgScore,
+          completionPct,
+          scorecardCount: completedFacilities.size, // Now includes KEV historical
+          facilityCount: teamFacilityIds.length,
+        };
+      });
+
+      return {
+        id: team.id,
+        name: showAllTeams ? `${team.name} (${team.company?.name || 'Unknown'})` : team.name,
+        color: COLORS[idx % COLORS.length],
+        data: monthlyData,
+      };
+    });
+
+    res.json({ teams: teamTrends, months: monthList.map(m => m.key) });
+  } catch (error) {
+    console.error('Error fetching team trends:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

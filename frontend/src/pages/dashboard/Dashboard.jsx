@@ -22,15 +22,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { reportsApi } from '../../api/reports';
+import { FacilityLeaderDashboard } from './FacilityLeaderDashboard';
+import { PerformanceTrendChart } from '../../components/charts/PerformanceTrendChart';
 
 const statusColors = {
   draft: 'warning',
@@ -349,12 +348,23 @@ function TeamLeaderDashboard({ data }) {
  * Company Leader Dashboard
  */
 function CompanyLeaderDashboard({ data }) {
-  // Colors for bar chart
-  const getBarColor = (score) => {
-    if (score >= 630) return '#22c55e';
-    if (score >= 490) return '#eab308';
-    return '#ef4444';
-  };
+  const [teamTrends, setTeamTrends] = useState([]);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadTrends = async () => {
+      try {
+        // For company_leader, the backend will determine company from auth context
+        const result = await reportsApi.getTeamTrends({ months: 12 });
+        setTeamTrends(result.teams || []);
+      } catch (err) {
+        console.error('Error loading team trends:', err);
+      } finally {
+        setTrendsLoading(false);
+      }
+    };
+    loadTrends();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -414,41 +424,21 @@ function CompanyLeaderDashboard({ data }) {
         </Card>
       </div>
 
-      {/* Team Comparison */}
+      {/* Team Performance Trend Chart */}
+      <PerformanceTrendChart
+        entities={teamTrends}
+        title="Team Performance Trends"
+        defaultMetric="score"
+        loading={trendsLoading}
+        emptyMessage="No team trend data available"
+      />
+
+      {/* Team Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Team Performance</CardTitle>
+          <CardTitle>Team Summary (This Month)</CardTitle>
         </CardHeader>
         <CardContent>
-          {data.teamStats?.length > 0 && (
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.teamStats} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, TOTAL_POSSIBLE_SCORE]} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white px-3 py-2 shadow-lg rounded-lg border">
-                          <p className="font-medium">{data.name}</p>
-                          <p className="text-sm">Avg Score: <span className="font-medium">{data.avgScore}</span></p>
-                          <p className="text-xs text-gray-500">{data.completedCount}/{data.facilityCount} completed</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="avgScore">
-                    {data.teamStats.map((entry, index) => (
-                      <Cell key={index} fill={getBarColor(entry.avgScore || 0)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -529,11 +519,22 @@ function CompanyLeaderDashboard({ data }) {
  * Corporate/Admin Dashboard
  */
 function CorporateDashboard({ data }) {
-  const getBarColor = (score) => {
-    if (score >= 630) return '#22c55e';
-    if (score >= 490) return '#eab308';
-    return '#ef4444';
-  };
+  const [companyTrends, setCompanyTrends] = useState([]);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadTrends = async () => {
+      try {
+        const result = await reportsApi.getCompanyTrends({ months: 12 });
+        setCompanyTrends(result.companies || []);
+      } catch (err) {
+        console.error('Error loading company trends:', err);
+      } finally {
+        setTrendsLoading(false);
+      }
+    };
+    loadTrends();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -612,46 +613,26 @@ function CorporateDashboard({ data }) {
         </Card>
       </div>
 
-      {/* Company Comparison */}
+      {/* Company Performance Trend Chart */}
+      <PerformanceTrendChart
+        entities={companyTrends}
+        title="Company Performance Trends"
+        defaultMetric="score"
+        loading={trendsLoading}
+        emptyMessage="No company trend data available"
+      />
+
+      {/* Company Summary Table */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Company Performance</CardTitle>
+            <CardTitle>Company Summary (This Month)</CardTitle>
             <Link to="/reports/companies">
               <Button variant="ghost" size="sm">View Details <ArrowRight className="h-4 w-4 ml-1" /></Button>
             </Link>
           </div>
         </CardHeader>
         <CardContent>
-          {data.companyStats?.length > 0 && (
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.companyStats} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, TOTAL_POSSIBLE_SCORE]} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white px-3 py-2 shadow-lg rounded-lg border">
-                          <p className="font-medium">{data.name}</p>
-                          <p className="text-sm">Avg Score: <span className="font-medium">{data.avgScore}</span></p>
-                          <p className="text-xs text-gray-500">{data.teamCount} teams, {data.facilityCount} facilities</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="avgScore">
-                    {data.companyStats.map((entry, index) => (
-                      <Cell key={index} fill={getBarColor(entry.avgScore || 0)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -798,6 +779,7 @@ export function Dashboard() {
 
       {/* Role-based Dashboard */}
       {data?.role === 'clinical_resource' && <ClinicalResourceDashboard data={data} />}
+      {data?.role === 'facility_leader' && <FacilityLeaderDashboard />}
       {data?.role === 'team_leader' && <TeamLeaderDashboard data={data} />}
       {data?.role === 'company_leader' && <CompanyLeaderDashboard data={data} />}
       {['corporate', 'admin'].includes(data?.role) && <CorporateDashboard data={data} />}

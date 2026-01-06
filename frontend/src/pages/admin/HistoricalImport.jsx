@@ -89,15 +89,16 @@ export function HistoricalImport() {
 
     const fileArray = Array.from(selectedFiles);
 
-    // Validate file types
+    // Validate file types (xlsx, xls, xlsm)
     const validFiles = fileArray.filter(f =>
-      f.name.match(/\.xlsx?$/i) ||
+      f.name.match(/\.xls[xm]?$/i) ||
       f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      f.type === 'application/vnd.ms-excel'
+      f.type === 'application/vnd.ms-excel' ||
+      f.type === 'application/vnd.ms-excel.sheet.macroEnabled.12'
     );
 
     if (validFiles.length === 0) {
-      setError('Please upload Excel files (.xlsx or .xls)');
+      setError('Please upload Excel files (.xlsx, .xls, or .xlsm)');
       return;
     }
 
@@ -521,7 +522,7 @@ export function HistoricalImport() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.xlsm"
                       multiple={importMode === 'full'}
                       onChange={(e) => handleFiles(e.target.files)}
                     />
@@ -530,7 +531,7 @@ export function HistoricalImport() {
                 <p className="mt-2 text-xs text-gray-500">
                   {importMode === 'full'
                     ? 'Upload multiple Excel files with full audit data (one per facility per month)'
-                    : 'Excel files only (.xlsx, .xls)'
+                    : 'Excel files only (.xlsx, .xls, .xlsm)'
                   }
                 </p>
               </>

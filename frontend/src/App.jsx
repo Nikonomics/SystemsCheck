@@ -80,7 +80,7 @@ function App() {
             <Route
               path="/admin/users"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><UserManagement /></Suspense>
                 </ProtectedRoute>
               }
@@ -88,7 +88,7 @@ function App() {
             <Route
               path="/admin/organization"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><OrganizationManagement /></Suspense>
                 </ProtectedRoute>
               }
@@ -96,7 +96,7 @@ function App() {
             <Route
               path="/admin/settings"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><Settings /></Suspense>
                 </ProtectedRoute>
               }
@@ -104,7 +104,7 @@ function App() {
             <Route
               path="/admin/import"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><HistoricalImport /></Suspense>
                 </ProtectedRoute>
               }
@@ -112,7 +112,7 @@ function App() {
             <Route
               path="/admin/import/kev"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><KevHistoricalImport /></Suspense>
                 </ProtectedRoute>
               }
@@ -120,7 +120,7 @@ function App() {
             <Route
               path="/admin/template"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><TemplateEditor /></Suspense>
                 </ProtectedRoute>
               }
@@ -128,7 +128,7 @@ function App() {
             <Route
               path="/admin/analytics"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'corporate']}>
                   <Suspense fallback={<PageLoader />}><AnalyticsDashboard /></Suspense>
                 </ProtectedRoute>
               }

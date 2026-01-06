@@ -52,4 +52,22 @@ export const reportsApi = {
     const response = await client.get('/reports/systems', { params });
     return response.data;
   },
+
+  /**
+   * Get company trend data (monthly averages over time)
+   * @param {Object} params - { months: number (default 12) }
+   */
+  getCompanyTrends: async (params = {}) => {
+    const response = await client.get('/reports/company-trends', { params });
+    return response.data;
+  },
+
+  /**
+   * Get team trend data for a company (monthly averages over time)
+   * @param {Object} params - { companyId: number, months: number (default 12) }
+   */
+  getTeamTrends: async (params = {}) => {
+    const response = await client.get('/reports/team-trends', { params });
+    return response.data;
+  },
 };

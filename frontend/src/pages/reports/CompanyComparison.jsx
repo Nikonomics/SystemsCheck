@@ -74,6 +74,7 @@ export function CompanyComparison() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [metric, setMetric] = useState('score'); // 'score' or 'completion'
   const [filters, setFilters] = useState({
     date_range: searchParams.get('date_range') || '6',
     state: searchParams.get('state') || '',
@@ -229,11 +230,36 @@ export function CompanyComparison() {
         </Card>
       )}
 
-      {/* Bar Chart */}
+      {/* Bar Chart with Toggle */}
       {data?.companies?.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Company Average Scores</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Company {metric === 'score' ? 'Average Scores' : 'Completion Rates'}</CardTitle>
+              {/* Metric Toggle */}
+              <div className="inline-flex rounded-lg border border-gray-200 p-1 bg-gray-50">
+                <button
+                  onClick={() => setMetric('score')}
+                  className={`px-3 py-1 text-sm rounded-md transition ${
+                    metric === 'score'
+                      ? 'bg-white shadow text-gray-900 font-medium'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Avg Score
+                </button>
+                <button
+                  onClick={() => setMetric('completion')}
+                  className={`px-3 py-1 text-sm rounded-md transition ${
+                    metric === 'completion'
+                      ? 'bg-white shadow text-gray-900 font-medium'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Completion %
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -250,7 +276,11 @@ export function CompanyComparison() {
                     textAnchor="end"
                     height={80}
                   />
-                  <YAxis domain={[0, 700]} tick={{ fontSize: 12 }} />
+                  <YAxis
+                    domain={metric === 'score' ? [0, 700] : [0, 100]}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={metric === 'completion' ? (v) => `${v}%` : undefined}
+                  />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
@@ -259,21 +289,27 @@ export function CompanyComparison() {
                         <div className="bg-white px-3 py-2 shadow-lg rounded-lg border">
                           <p className="font-medium">{company.name}</p>
                           <p className="text-sm">
-                            Avg Score: <span className="font-medium">{company.avgScore || '—'}</span>
+                            {metric === 'score' ? 'Avg Score' : 'Completion'}:
+                            <span className="font-medium ml-1">
+                              {metric === 'score' ? (company.avgScore || '—') : `${company.completionRate}%`}
+                            </span>
                           </p>
                           <p className="text-xs text-gray-500">
                             {company.teamCount} teams, {company.facilityCount} facilities
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {company.completionRate}% completion
                           </p>
                         </div>
                       );
                     }}
                   />
-                  <Bar dataKey="avgScore">
+                  <Bar dataKey={metric === 'score' ? 'avgScore' : 'completionRate'}>
                     {data.companies.map((entry, index) => (
-                      <Cell key={index} fill={getBarColor(entry.avgScore || 0)} />
+                      <Cell
+                        key={index}
+                        fill={metric === 'score'
+                          ? getBarColor(entry.avgScore || 0)
+                          : (entry.completionRate >= 80 ? '#22c55e' : entry.completionRate >= 50 ? '#eab308' : '#ef4444')
+                        }
+                      />
                     ))}
                   </Bar>
                 </BarChart>

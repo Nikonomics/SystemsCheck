@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { importApi } from '../../api/import';
 
 const MONTH_NAMES = [
@@ -273,153 +273,150 @@ export function KevHistoricalPanel({ facilityId }) {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-gray-700">Period</th>
-              {categoryNames.map((name, idx) => (
-                <th key={name} className="px-3 py-2 text-center font-medium" style={{ color: CATEGORY_COLORS[idx] }}>
-                  <span className="truncate block max-w-[80px]" title={name}>
-                    {name.split(' ').slice(0, 2).join(' ')}
-                  </span>
+              {categoryNames.map((name) => (
+                <th key={name} className="px-3 py-2 text-center font-medium text-gray-700">
+                  <span title={name}>{name}</span>
                 </th>
               ))}
-              <th className="px-3 py-2 text-center font-medium text-gray-900">Overall</th>
+              <th className="px-3 py-2 text-center font-medium text-gray-700">Overall</th>
               <th className="px-3 py-2 text-right font-medium text-gray-700">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {data.map((record) => (
-              <tr key={record.id} className="hover:bg-gray-50">
-                <td className="px-3 py-2 font-medium">
-                  {MONTH_NAMES[record.month - 1]} {record.year}
-                </td>
-                {categoryNames.map((catName, idx) => {
-                  const cat = record.categories?.find(c => c.categoryName === catName);
-                  return (
-                    <td key={catName} className="px-3 py-2 text-center">
-                      {cat ? (
-                        <span className={`font-medium ${
-                          cat.percentage >= 80 ? 'text-green-600' :
-                          cat.percentage >= 60 ? 'text-yellow-600' :
-                          'text-red-600'
-                        }`}>
-                          {cat.percentage}%
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="px-3 py-2 text-center">
-                  <span className={`font-bold ${
-                    record.overallScore >= 80 ? 'text-green-600' :
-                    record.overallScore >= 60 ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {record.overallScore}%
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => setExpanded(expanded === record.id ? null : record.id)}
-                      className="text-gray-500 hover:text-gray-700 text-xs"
-                    >
-                      {expanded === record.id ? 'Hide' : 'Details'}
-                    </button>
-                    {record.filePath && (
+              <React.Fragment key={record.id}>
+                <tr className="hover:bg-gray-50">
+                  <td className="px-3 py-2 font-medium">
+                    {MONTH_NAMES[record.month - 1]} {record.year}
+                  </td>
+                  {categoryNames.map((catName) => {
+                    const cat = record.categories?.find(c => c.categoryName === catName);
+                    return (
+                      <td key={catName} className="px-3 py-2 text-center">
+                        {cat ? (
+                          <span className={`font-medium ${
+                            cat.percentage >= 80 ? 'text-emerald-600/80' :
+                            cat.percentage >= 60 ? 'text-amber-600/80' :
+                            'text-rose-600/80'
+                          }`}>
+                            {Number(cat.percentage).toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-2 text-center">
+                    <span className={`font-semibold ${
+                      record.overallScore >= 80 ? 'text-emerald-600/90' :
+                      record.overallScore >= 60 ? 'text-amber-600/90' :
+                      'text-rose-600/90'
+                    }`}>
+                      {Number(record.overallScore).toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => handleDownload(record)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
+                        onClick={() => setExpanded(expanded === record.id ? null : record.id)}
+                        className="text-gray-500 hover:text-gray-700 text-xs"
                       >
-                        Download
+                        {expanded === record.id ? 'Hide' : 'Details'}
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(record)}
-                      disabled={deleting === record.id}
-                      className="text-red-600 hover:text-red-800 text-xs disabled:opacity-50"
-                    >
-                      {deleting === record.id ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                      {record.filePath && (
+                        <button
+                          onClick={() => handleDownload(record)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Download
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(record)}
+                        disabled={deleting === record.id}
+                        className="text-red-600 hover:text-red-800 text-xs disabled:opacity-50"
+                      >
+                        {deleting === record.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {/* Inline Expanded Details */}
+                {expanded === record.id && (
+                  <tr>
+                    <td colSpan={categoryNames.length + 3} className="px-3 py-4 bg-gray-50">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium">{MONTH_NAMES[record.month - 1]} {record.year} Details</h4>
+                        <button
+                          onClick={() => setExpanded(null)}
+                          className="text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      {/* Meta Info */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+                        <div>
+                          <span className="text-gray-500">Format:</span>
+                          <div className="font-medium">{record.format || '-'}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Completed By:</span>
+                          <div className="font-medium">{record.auditCompletedBy || '-'}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Date Completed:</span>
+                          <div className="font-medium">{record.dateOfCompletion || '-'}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Total Score:</span>
+                          <div className="font-medium">{Math.round(record.totalMet)} / {Math.round(record.totalPossible)}</div>
+                        </div>
+                      </div>
+
+                      {/* Category Breakdown */}
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 mb-2">Quality Areas</h5>
+                        <div className="space-y-2">
+                          {record.categories?.map((cat, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span className="text-sm w-56" title={cat.categoryName}>
+                                {cat.categoryName}
+                              </span>
+                              <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    cat.percentage >= 80 ? 'bg-emerald-300' :
+                                    cat.percentage >= 60 ? 'bg-amber-300' :
+                                    'bg-rose-300'
+                                  }`}
+                                  style={{ width: `${Math.min(100, cat.percentage)}%` }}
+                                />
+                              </div>
+                              <span className={`text-sm font-medium w-16 text-right ${
+                                cat.percentage >= 80 ? 'text-emerald-600/80' :
+                                cat.percentage >= 60 ? 'text-amber-600/80' :
+                                'text-rose-600/80'
+                              }`}>
+                                {Number(cat.percentage).toFixed(1)}%
+                              </span>
+                              <span className="text-sm text-gray-500 w-20 text-right">
+                                {Math.round(cat.metScore)}/{Math.round(cat.possibleScore)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
-
-      {/* Expanded Details */}
-      {expanded && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-          {(() => {
-            const record = data.find(r => r.id === expanded);
-            if (!record) return null;
-            return (
-              <>
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-medium">{MONTH_NAMES[record.month - 1]} {record.year} Details</h4>
-                  <button
-                    onClick={() => setExpanded(null)}
-                    className="text-gray-500 hover:text-gray-700 text-sm"
-                  >
-                    Close
-                  </button>
-                </div>
-
-                {/* Meta Info */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Format:</span>
-                    <div className="font-medium">{record.format || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Completed By:</span>
-                    <div className="font-medium">{record.auditCompletedBy || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Date Completed:</span>
-                    <div className="font-medium">{record.dateOfCompletion || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Total Score:</span>
-                    <div className="font-medium">{record.totalMet} / {record.totalPossible}</div>
-                  </div>
-                </div>
-
-                {/* Category Breakdown */}
-                <div>
-                  <h5 className="text-sm font-medium text-gray-700 mb-2">Quality Areas</h5>
-                  <div className="space-y-2">
-                    {record.categories?.map((cat, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="text-sm w-48 truncate" title={cat.categoryName}>
-                          {cat.categoryName}
-                        </span>
-                        <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              cat.percentage >= 80 ? 'bg-green-500' :
-                              cat.percentage >= 60 ? 'bg-yellow-500' :
-                              'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.min(100, cat.percentage)}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium w-16 text-right">
-                          {cat.percentage}%
-                        </span>
-                        <span className="text-sm text-gray-500 w-20 text-right">
-                          {cat.metScore}/{cat.possibleScore}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      )}
     </div>
   );
 }

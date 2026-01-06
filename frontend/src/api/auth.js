@@ -15,4 +15,9 @@ export const authApi = {
     const response = await client.post('/auth/logout');
     return response.data;
   },
+
+  completeOnboarding: async () => {
+    const response = await client.post('/auth/onboarding-complete');
+    return response.data;
+  },
 };

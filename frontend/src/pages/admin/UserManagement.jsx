@@ -13,6 +13,7 @@ import {
   Building2,
   Users,
   MapPin,
+  LogIn,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -301,6 +302,24 @@ export function UserManagement() {
     }
   };
 
+  const handleImpersonate = async (user) => {
+    if (!window.confirm(`Login as ${user.firstName} ${user.lastName} (${user.email})? You will be logged out of your current session.`)) {
+      return;
+    }
+
+    try {
+      const result = await usersApi.impersonate(user.id);
+      // Store token and user in localStorage
+      localStorage.setItem('token', result.token);
+      localStorage.setItem('user', JSON.stringify(result.user));
+      success(`Logged in as ${result.user.email}`);
+      // Reload the page to refresh auth context
+      window.location.href = '/dashboard';
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to login as user');
+    }
+  };
+
   const toggleFacility = (facilityId) => {
     setFormData(prev => ({
       ...prev,
@@ -527,6 +546,11 @@ export function UserManagement() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-1">
+                        {user.id !== currentUser?.id && user.isActive && (
+                          <Button variant="ghost" size="sm" onClick={() => handleImpersonate(user)} title="Login As" className="text-blue-600 hover:text-blue-700">
+                            <LogIn className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => openEditModal(user)} title="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>

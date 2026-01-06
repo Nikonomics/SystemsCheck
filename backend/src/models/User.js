@@ -55,6 +55,12 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: true,
     field: 'is_active'
+  },
+  onboardingCompleted: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'onboarding_completed'
   }
 }, {
   tableName: 'users',

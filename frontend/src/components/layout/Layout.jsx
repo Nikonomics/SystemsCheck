@@ -4,16 +4,35 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { SkipLink } from '../ui/Accessibility';
 import { useAnalyticsIdentify } from '../../analytics';
+import { useAuth } from '../../context/AuthContext';
+import { WelcomeModal } from '../onboarding/WelcomeModal';
 
 export function Layout({ title = 'Dashboard' }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, completeOnboarding } = useAuth();
+
+  // Track whether to show the welcome modal
+  const [showWelcome, setShowWelcome] = useState(true);
+  const shouldShowWelcome = showWelcome && user && user.onboardingCompleted === false;
 
   // Sync user identity with analytics
   useAnalyticsIdentify();
 
+  const handleOnboardingComplete = () => {
+    setShowWelcome(false);
+    completeOnboarding();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SkipLink targetId="main-content" />
+
+      {/* Welcome Modal for new users */}
+      <WelcomeModal
+        isOpen={shouldShowWelcome}
+        onComplete={handleOnboardingComplete}
+        userRole={user?.role}
+      />
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div

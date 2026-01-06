@@ -169,9 +169,46 @@ const upload = multer({
   }
 });
 
-// All routes require admin role
+// ============================================================================
+// PUBLIC READ-ONLY ROUTES (require authentication but not admin)
+// These must be defined BEFORE the admin middleware below
+// ============================================================================
+
+/**
+ * GET /api/import/kev-historical/facility/:facilityId
+ * Get KEV historical data for a specific facility (for facility detail page)
+ * Available to all authenticated users (not just admins)
+ */
+router.get('/kev-historical/facility/:facilityId', authenticateToken, async (req, res) => {
+  try {
+    const kevHistoricals = await KevHistorical.findAll({
+      where: { facilityId: req.params.facilityId },
+      include: [
+        {
+          model: KevHistoricalCategory,
+          as: 'categories',
+          attributes: ['categoryName', 'possibleScore', 'metScore', 'percentage', 'sortOrder']
+        }
+      ],
+      order: [
+        ['year', 'DESC'],
+        ['month', 'DESC'],
+        [{ model: KevHistoricalCategory, as: 'categories' }, 'sortOrder', 'ASC']
+      ]
+    });
+
+    res.json({ data: kevHistoricals });
+  } catch (error) {
+    console.error('KEV facility fetch error:', error);
+    res.status(500).json({ message: 'Failed to fetch KEV historical data', error: error.message });
+  }
+});
+
+// ============================================================================
+// ADMIN ROUTES (admin and corporate roles have access)
+// ============================================================================
 router.use(authenticateToken);
-router.use(authorizeRoles('admin'));
+router.use(authorizeRoles('admin', 'corporate'));
 
 /**
  * POST /api/import/historical
@@ -1249,6 +1286,19 @@ router.post('/kev-historical', upload.array('files', 100), async (req, res) => {
       }
     }
 
+    // Parse score overrides for manual category score corrections
+    // Structure: { filename: { categoryIndex: { percentage: number } } }
+    let scoreOverrides = {};
+    if (req.body.scoreOverrides) {
+      try {
+        scoreOverrides = typeof req.body.scoreOverrides === 'string'
+          ? JSON.parse(req.body.scoreOverrides)
+          : req.body.scoreOverrides;
+      } catch (e) {
+        console.warn('Could not parse scoreOverrides:', e.message);
+      }
+    }
+
     // Create import batch
     const batch = await ImportBatch.create({
       status: 'processing',
@@ -1377,15 +1427,30 @@ router.post('/kev-historical', upload.array('files', 100), async (req, res) => {
               importedById: req.user.id
             }, { transaction });
 
-            // Create category records
+            // Create category records (with score overrides if present)
+            const fileScoreOverrides = scoreOverrides[file.originalname] || {};
             for (let idx = 0; idx < parsed.qualityAreas.length; idx++) {
               const area = parsed.qualityAreas[idx];
+
+              // Check if there's a manual score override for this category
+              const categoryOverride = fileScoreOverrides[idx];
+              let effectivePercentage = area.percentage;
+              let effectiveMetScore = area.metScore;
+
+              if (categoryOverride && categoryOverride.percentage !== null && categoryOverride.percentage !== undefined) {
+                effectivePercentage = categoryOverride.percentage;
+                // Recalculate metScore based on the overridden percentage
+                if (area.possibleScore) {
+                  effectiveMetScore = Math.round((effectivePercentage / 100) * area.possibleScore * 10) / 10;
+                }
+              }
+
               await KevHistoricalCategory.create({
                 kevHistoricalId: kevHistorical.id,
                 categoryName: area.category,
                 possibleScore: area.possibleScore,
-                metScore: area.metScore,
-                percentage: area.percentage,
+                metScore: effectiveMetScore,
+                percentage: effectivePercentage,
                 sortOrder: idx
               }, { transaction });
             }
@@ -1658,7 +1723,7 @@ router.get('/kev-historical/:id/download', async (req, res) => {
  * DELETE /api/import/kev-historical/:id
  * Delete a single KEV historical record
  */
-router.delete('/kev-historical/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.delete('/kev-historical/:id', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   try {
     const kevHistorical = await KevHistorical.findByPk(req.params.id);
 
@@ -1681,35 +1746,6 @@ router.delete('/kev-historical/:id', authenticateToken, authorizeRoles('admin'),
   } catch (error) {
     console.error('KEV delete error:', error);
     res.status(500).json({ message: 'Delete failed', error: error.message });
-  }
-});
-
-/**
- * GET /api/import/kev-historical/facility/:facilityId
- * Get KEV historical data for a specific facility (for facility detail page)
- */
-router.get('/kev-historical/facility/:facilityId', async (req, res) => {
-  try {
-    const kevHistoricals = await KevHistorical.findAll({
-      where: { facilityId: req.params.facilityId },
-      include: [
-        {
-          model: KevHistoricalCategory,
-          as: 'categories',
-          attributes: ['categoryName', 'possibleScore', 'metScore', 'percentage', 'sortOrder']
-        }
-      ],
-      order: [
-        ['year', 'DESC'],
-        ['month', 'DESC'],
-        [{ model: KevHistoricalCategory, as: 'categories' }, 'sortOrder', 'ASC']
-      ]
-    });
-
-    res.json({ data: kevHistoricals });
-  } catch (error) {
-    console.error('KEV facility fetch error:', error);
-    res.status(500).json({ message: 'Failed to fetch data', error: error.message });
   }
 });
 

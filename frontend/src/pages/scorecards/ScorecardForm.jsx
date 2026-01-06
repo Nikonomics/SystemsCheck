@@ -684,8 +684,53 @@ export function ScorecardForm() {
           </div>
         </div>
 
+        {/* Progress indicator - always visible */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">
+              {isSummaryTab ? 'Summary' : `System ${currentSystem?.systemNumber} of ${sortedSystems.filter(s => s.systemNumber <= 7).length}`}
+            </span>
+            {!isSummaryTab && (
+              <span className="text-xs text-gray-500">
+                {currentSystem?.systemName}
+              </span>
+            )}
+          </div>
+          {/* Visual progress bar */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Progress:</span>
+            <div className="flex gap-0.5">
+              {sortedSystems.filter(s => s.systemNumber <= 7).map((system) => {
+                const markedComplete = !!system.completedById;
+                const allItemsScored = isSystemComplete(system);
+                const isActive = !isSummaryTab && currentSystem?.systemNumber === system.systemNumber;
+                return (
+                  <div
+                    key={system.id}
+                    className={`
+                      w-6 h-2 rounded-sm transition-colors
+                      ${markedComplete
+                        ? 'bg-green-500'
+                        : allItemsScored
+                          ? 'bg-green-300'
+                          : isActive
+                            ? 'bg-primary-400'
+                            : 'bg-gray-200'
+                      }
+                    `}
+                    title={`System ${system.systemNumber}: ${markedComplete ? 'Completed' : allItemsScored ? 'All items scored' : 'In progress'}`}
+                  />
+                );
+              })}
+            </div>
+            <span className="text-xs font-medium text-gray-600">
+              {sortedSystems.filter(s => s.systemNumber <= 7 && (!!s.completedById || isSystemComplete(s))).length}/7
+            </span>
+          </div>
+        </div>
+
         {/* Tab navigation - compact design */}
-        <div className="mt-4 -mb-4">
+        <div className="mt-3 -mb-4">
           <div className="flex flex-wrap gap-1">
             {sortedSystems.map((system, sortedIndex) => {
                 const systemScore = calculateSystemTotal(system.items || []);

@@ -1,6 +1,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { User, Facility, Team, Company, UserFacility } = require('../models');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const sequelize = require('../config/database');
@@ -120,7 +121,7 @@ router.put('/profile/password', authenticateToken, async (req, res) => {
  * GET /api/users
  * List all users with pagination, search, and filters
  */
-router.get('/', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -198,7 +199,7 @@ router.get('/', authenticateToken, authorizeRoles('admin'), async (req, res) => 
  * GET /api/users/:id
  * Get a single user by ID
  */
-router.get('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/:id', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
       attributes: { exclude: ['passwordHash'] },
@@ -240,7 +241,7 @@ router.get('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) 
  * POST /api/users
  * Create a new user
  */
-router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
@@ -348,7 +349,7 @@ router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) =>
  * PUT /api/users/:id/password
  * Admin reset user password
  */
-router.put('/:id/password', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.put('/:id/password', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   try {
     const { password } = req.body;
 
@@ -378,7 +379,7 @@ router.put('/:id/password', authenticateToken, authorizeRoles('admin'), async (r
  * PUT /api/users/:id
  * Update a user
  */
-router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.put('/:id', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
@@ -517,7 +518,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) 
  * DELETE /api/users/:id
  * Soft delete a user (set is_active = false)
  */
-router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.delete('/:id', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
 
@@ -553,6 +554,58 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, re
     res.status(500).json({
       error: 'Server error',
       message: 'Failed to delete user'
+    });
+  }
+});
+
+/**
+ * POST /api/users/:id/impersonate
+ * Generate a token to login as another user (for testing)
+ * Only available to admin and corporate roles
+ */
+router.post('/:id/impersonate', authenticateToken, authorizeRoles('admin', 'corporate'), async (req, res) => {
+  try {
+    const targetUser = await User.findByPk(req.params.id);
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: 'Not found',
+        message: 'User not found'
+      });
+    }
+
+    if (!targetUser.isActive) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'Cannot impersonate inactive user'
+      });
+    }
+
+    // Generate JWT token for target user
+    const token = jwt.sign(
+      { userId: targetUser.id, email: targetUser.email, role: targetUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Return token and user info
+    res.json({
+      token,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        role: targetUser.role,
+        onboardingCompleted: targetUser.onboardingCompleted
+      },
+      message: `Now logged in as ${targetUser.email}`
+    });
+  } catch (error) {
+    console.error('Impersonate error:', error);
+    res.status(500).json({
+      error: 'Server error',
+      message: 'Failed to impersonate user'
     });
   }
 });

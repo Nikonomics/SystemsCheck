@@ -54,6 +54,15 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const completeOnboarding = () => {
+    // Update local user state to mark onboarding as completed
+    if (user) {
+      const updatedUser = { ...user, onboardingCompleted: true };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -61,6 +70,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     login,
     logout,
+    completeOnboarding,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

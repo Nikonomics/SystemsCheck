@@ -29,6 +29,13 @@ export function KevHistoricalImport() {
   // Selected files (checkboxes) - null means all valid files are selected
   const [selectedFiles, setSelectedFiles] = useState({});
 
+  // Score overrides for manual category score corrections
+  // Structure: { filename: { categoryIndex: { percentage: number } } }
+  const [scoreOverrides, setScoreOverrides] = useState({});
+
+  // Expanded rows for editing category scores
+  const [expandedRows, setExpandedRows] = useState({});
+
   // Available facilities for dropdown
   const [facilities, setFacilities] = useState([]);
 
@@ -99,6 +106,65 @@ export function KevHistoricalImport() {
       ...prev,
       [filename]: !prev[filename]
     }));
+  };
+
+  // Handle row expansion toggle for editing category scores
+  const toggleRowExpansion = (filename) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [filename]: !prev[filename]
+    }));
+  };
+
+  // Handle score override changes
+  const handleScoreOverride = (filename, categoryIndex, percentage) => {
+    setScoreOverrides(prev => ({
+      ...prev,
+      [filename]: {
+        ...prev[filename],
+        [categoryIndex]: { percentage: percentage !== '' ? parseFloat(percentage) : null }
+      }
+    }));
+  };
+
+  // Calculate if there's a score mismatch between category sum and overall
+  const getScoreMismatch = (result) => {
+    if (!result.qualityAreas || result.qualityAreas.length === 0) return null;
+    if (!result.overallScore && !result.totalPercentage) return null;
+
+    const overallScore = result.overallScore || result.totalPercentage;
+
+    // Get effective scores (with overrides applied)
+    const effectiveAreas = result.qualityAreas.map((area, idx) => {
+      const override = scoreOverrides[result.filename]?.[idx];
+      return override?.percentage !== null && override?.percentage !== undefined
+        ? override.percentage
+        : area.percentage;
+    });
+
+    // Calculate average of category percentages
+    const categorySum = effectiveAreas.reduce((sum, pct) => sum + (pct || 0), 0);
+    const categoryAvg = categorySum / effectiveAreas.length;
+
+    // Check if there's a significant mismatch (more than 2% difference)
+    const difference = Math.abs(overallScore - categoryAvg);
+    if (difference > 2) {
+      return {
+        overall: overallScore,
+        categoryAvg: Math.round(categoryAvg * 10) / 10,
+        difference: Math.round(difference * 10) / 10
+      };
+    }
+    return null;
+  };
+
+  // Get effective category percentage (with override if present)
+  const getEffectiveCategoryScore = (filename, categoryIndex, originalPercentage) => {
+    const override = scoreOverrides[filename]?.[categoryIndex];
+    if (override?.percentage !== null && override?.percentage !== undefined) {
+      return override.percentage;
+    }
+    return originalPercentage;
   };
 
   // Toggle all files
@@ -175,6 +241,8 @@ export function KevHistoricalImport() {
     setDateOverrides({});
     setFacilityOverrides({});
     setSelectedFiles({});
+    setScoreOverrides({});
+    setExpandedRows({});
 
     try {
       setLoading(true);
@@ -257,6 +325,7 @@ export function KevHistoricalImport() {
       formData.append('dateOverrides', JSON.stringify(dateOverrides));
       formData.append('facilityOverrides', JSON.stringify(facilityOverrides));
       formData.append('selectedFiles', JSON.stringify(selectedFilenames));
+      formData.append('scoreOverrides', JSON.stringify(scoreOverrides));
 
       const results = await importApi.importKevHistorical(formData);
       setImportResults(results);
@@ -295,6 +364,8 @@ export function KevHistoricalImport() {
     setDateOverrides({});
     setFacilityOverrides({});
     setSelectedFiles({});
+    setScoreOverrides({});
+    setExpandedRows({});
   };
 
   const validCount = validationResults?.valid || 0;
@@ -558,6 +629,7 @@ export function KevHistoricalImport() {
                         title="Select/deselect all valid files"
                       />
                     </th>
+                    <th className="px-2 py-2 w-8"></th>
                     <th className="px-3 py-2 text-left">File</th>
                     <th className="px-3 py-2 text-left">Format</th>
                     <th className="px-3 py-2 text-left">Facility</th>
@@ -567,74 +639,165 @@ export function KevHistoricalImport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {validationResults.results.map((r, i) => (
-                    <tr key={i} className={
-                      r.isValid
-                        ? (selectedFiles[r.filename] ? 'bg-green-50' : 'bg-gray-50')
-                        : 'bg-red-50'
-                    }>
-                      <td className="px-2 py-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={!!selectedFiles[r.filename]}
-                          onChange={() => handleFileToggle(r.filename)}
-                          disabled={!r.isValid}
-                          className="rounded border-gray-300 disabled:opacity-50"
-                        />
-                      </td>
-                      <td className="px-3 py-2 max-w-[200px] truncate" title={r.filename}>
-                        {r.filename}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">{r.format || '-'}</td>
-                      <td className="px-3 py-2">
-                        {r.needsFacility ? (
-                          <span className="text-orange-600 text-xs">Select facility above</span>
-                        ) : (
-                          <>
-                            <div className="truncate max-w-[150px]" title={r.matchedFacility || r.facilityName}>
-                              {r.matchedFacility || r.facilityName || '-'}
-                            </div>
-                            {r.matchScore && r.matchScore < 1 && r.matchScore > 0 && (
-                              <span className="text-xs text-yellow-600">
-                                ({Math.round(r.matchScore * 100)}% match)
+                  {validationResults.results.map((r, i) => {
+                    const mismatch = getScoreMismatch(r);
+                    const isExpanded = expandedRows[r.filename];
+                    const hasCategories = r.qualityAreas && r.qualityAreas.length > 0;
+
+                    return (
+                      <>
+                        <tr key={i} className={
+                          r.isValid
+                            ? (selectedFiles[r.filename] ? 'bg-green-50' : 'bg-gray-50')
+                            : 'bg-red-50'
+                        }>
+                          <td className="px-2 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={!!selectedFiles[r.filename]}
+                              onChange={() => handleFileToggle(r.filename)}
+                              disabled={!r.isValid}
+                              className="rounded border-gray-300 disabled:opacity-50"
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            {hasCategories && (
+                              <button
+                                onClick={() => toggleRowExpansion(r.filename)}
+                                className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                                title={isExpanded ? 'Collapse categories' : 'Expand to edit categories'}
+                              >
+                                {isExpanded ? '▼' : '▶'}
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 max-w-[200px] truncate" title={r.filename}>
+                            {r.filename}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{r.format || '-'}</td>
+                          <td className="px-3 py-2">
+                            {r.needsFacility ? (
+                              <span className="text-orange-600 text-xs">Select facility above</span>
+                            ) : (
+                              <>
+                                <div className="truncate max-w-[150px]" title={r.matchedFacility || r.facilityName}>
+                                  {r.matchedFacility || r.facilityName || '-'}
+                                </div>
+                                {r.matchScore && r.matchScore < 1 && r.matchScore > 0 && (
+                                  <span className="text-xs text-yellow-600">
+                                    ({Math.round(r.matchScore * 100)}% match)
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {r.month && r.year ? (
+                              <span>
+                                {MONTH_NAMES[r.month - 1]} {r.year}
+                                {r.dateSource === 'manual' && (
+                                  <span className="ml-1 text-xs text-blue-600">(manual)</span>
+                                )}
                               </span>
+                            ) : (
+                              <span className="text-orange-600 text-xs">Set date above</span>
                             )}
-                          </>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.month && r.year ? (
-                          <span>
-                            {MONTH_NAMES[r.month - 1]} {r.year}
-                            {r.dateSource === 'manual' && (
-                              <span className="ml-1 text-xs text-blue-600">(manual)</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-orange-600 text-xs">Set date above</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-medium">
-                        {r.overallScore ? `${r.overallScore}%` :
-                         r.totalMet && r.totalPossible ?
-                         `${Math.round((r.totalMet / r.totalPossible) * 100)}%` : '-'}
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.isValid ? (
-                          <span className="text-green-600 text-sm">Valid</span>
-                        ) : (
-                          <div>
-                            <span className="text-red-600 text-sm">Invalid</span>
-                            {r.errors?.length > 0 && (
-                              <div className="text-xs text-red-500 mt-1 max-w-[150px]">
-                                {r.errors.join(', ')}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {r.overallScore ? `${r.overallScore}%` :
+                                 r.totalMet && r.totalPossible ?
+                                 `${Math.round((r.totalMet / r.totalPossible) * 100)}%` : '-'}
+                              </span>
+                              {mismatch && (
+                                <span
+                                  className="text-amber-600 cursor-help"
+                                  title={`Score mismatch: Overall ${mismatch.overall}% but categories avg ${mismatch.categoryAvg}% (${mismatch.difference}% diff). Click ▶ to edit.`}
+                                >
+                                  ⚠️
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            {r.isValid ? (
+                              <span className="text-green-600 text-sm">Valid</span>
+                            ) : (
+                              <div>
+                                <span className="text-red-600 text-sm">Invalid</span>
+                                {r.errors?.length > 0 && (
+                                  <div className="text-xs text-red-500 mt-1 max-w-[150px]">
+                                    {r.errors.join(', ')}
+                                  </div>
+                                )}
                               </div>
                             )}
-                          </div>
+                          </td>
+                        </tr>
+
+                        {/* Expanded Category Edit Row */}
+                        {isExpanded && hasCategories && (
+                          <tr key={`${i}-categories`} className="bg-blue-50 border-t border-blue-100">
+                            <td colSpan="8" className="px-4 py-3">
+                              <div className="text-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium text-blue-800">Category Scores</span>
+                                  {mismatch && (
+                                    <span className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded">
+                                      ⚠️ Overall: {mismatch.overall}% | Categories Avg: {mismatch.categoryAvg}% | Diff: {mismatch.difference}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                  {r.qualityAreas.map((area, idx) => {
+                                    const effectiveScore = getEffectiveCategoryScore(r.filename, idx, area.percentage);
+                                    const hasOverride = scoreOverrides[r.filename]?.[idx]?.percentage !== null &&
+                                                        scoreOverrides[r.filename]?.[idx]?.percentage !== undefined;
+                                    return (
+                                      <div key={idx} className="bg-white rounded p-2 border">
+                                        <div className="text-xs text-gray-600 truncate mb-1" title={area.category}>
+                                          {area.category}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="1"
+                                            value={effectiveScore ?? ''}
+                                            onChange={(e) => handleScoreOverride(r.filename, idx, e.target.value)}
+                                            className={`w-16 px-2 py-1 text-sm border rounded ${
+                                              hasOverride ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+                                            }`}
+                                          />
+                                          <span className="text-gray-500">%</span>
+                                          {hasOverride && (
+                                            <button
+                                              onClick={() => handleScoreOverride(r.filename, idx, null)}
+                                              className="text-xs text-gray-400 hover:text-red-500"
+                                              title="Reset to original"
+                                            >
+                                              ✕
+                                            </button>
+                                          )}
+                                        </div>
+                                        {hasOverride && area.percentage !== null && (
+                                          <div className="text-xs text-gray-400 mt-1">
+                                            Original: {area.percentage}%
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

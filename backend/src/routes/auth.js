@@ -64,7 +64,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role
+        role: user.role,
+        onboardingCompleted: user.onboardingCompleted
       }
     });
   } catch (error) {
@@ -130,6 +131,38 @@ router.post('/logout', authenticateToken, async (req, res) => {
   res.json({
     message: 'Logged out successfully'
   });
+});
+
+/**
+ * POST /api/auth/onboarding-complete
+ * Mark the current user's onboarding as completed
+ */
+router.post('/onboarding-complete', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Not found',
+        message: 'User not found'
+      });
+    }
+
+    // Update onboarding status
+    user.onboardingCompleted = true;
+    await user.save();
+
+    res.json({
+      message: 'Onboarding completed',
+      onboardingCompleted: true
+    });
+  } catch (error) {
+    console.error('Onboarding complete error:', error);
+    res.status(500).json({
+      error: 'Server error',
+      message: 'Failed to update onboarding status'
+    });
+  }
 });
 
 module.exports = router;

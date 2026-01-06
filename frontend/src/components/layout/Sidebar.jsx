@@ -14,13 +14,30 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
+// Role hierarchy from lowest to highest access
+const ROLE_HIERARCHY = [
+  'clinical_resource',
+  'facility_leader',
+  'team_leader',
+  'company_leader',
+  'corporate',
+  'admin'
+];
+
+// Check if user role meets minimum required role
+const hasMinRole = (userRole, minRole) => {
+  const userIndex = ROLE_HIERARCHY.indexOf(userRole);
+  const minIndex = ROLE_HIERARCHY.indexOf(minRole);
+  return userIndex >= 0 && minIndex >= 0 && userIndex >= minIndex;
+};
+
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Scorecards', href: '/scorecards', icon: ClipboardCheck },
-  { name: 'Facilities', href: '/facilities', icon: Building2 },
-  { name: 'Survey Analytics', href: '/survey-analytics', icon: Activity },
-  { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain, end: true },
-  { name: 'Team Intelligence', href: '/survey-intelligence/team', icon: Users },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, minRole: 'clinical_resource' },
+  { name: 'Scorecards', href: '/scorecards', icon: ClipboardCheck, minRole: 'clinical_resource' },
+  { name: 'Facilities', href: '/facilities', icon: Building2, minRole: 'clinical_resource' },
+  { name: 'Survey Analytics', href: '/survey-analytics', icon: Activity, minRole: 'team_leader' },
+  { name: 'Survey Intelligence', href: '/survey-intelligence', icon: Brain, end: true, minRole: 'facility_leader' },
+  { name: 'Team Intelligence', href: '/survey-intelligence/team', icon: Users, minRole: 'team_leader' },
 ];
 
 const adminNavigation = [
@@ -33,7 +50,10 @@ const adminNavigation = [
 
 export function Sidebar() {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'corporate';
+  const userRole = user?.role || 'clinical_resource';
+  const filteredNavigation = navigation.filter(item => hasMinRole(userRole, item.minRole));
+  // Both admin and corporate roles have access to admin pages
+  const hasAdminAccess = user?.role === 'admin' || user?.role === 'corporate';
 
   return (
     <aside className="fixed inset-y-0 left-0 w-64 bg-gray-900 flex flex-col">
@@ -45,7 +65,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-        {navigation.map((item) => (
+        {filteredNavigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
@@ -63,7 +83,7 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {isAdmin && (
+        {hasAdminAccess && (
           <>
             <div className="pt-4 mt-4 border-t border-gray-800">
               <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">

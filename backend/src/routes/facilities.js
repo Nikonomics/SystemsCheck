@@ -43,6 +43,42 @@ async function getUserTeamAndCompany(userId) {
 }
 
 /**
+ * Check if user has access to a facility based on their role
+ * @param {object} user - The authenticated user
+ * @param {object} facility - Facility with team (and team.company) included
+ * @returns {Promise<boolean>} - True if user has access
+ */
+async function checkFacilityAccess(user, facility) {
+  // admin and corporate can access all facilities
+  if (user.role === 'admin' || user.role === 'corporate') {
+    return true;
+  }
+
+  // clinical_resource and facility_leader can only access assigned facilities
+  if (user.role === 'clinical_resource' || user.role === 'facility_leader') {
+    const assignment = await UserFacility.findOne({
+      where: { userId: user.id, facilityId: facility.id },
+    });
+    return !!assignment;
+  }
+
+  // team_leader can access facilities in their team
+  if (user.role === 'team_leader') {
+    const userContext = await getUserTeamAndCompany(user.id);
+    return facility.team?.id === userContext.teamId;
+  }
+
+  // company_leader can access facilities in their company
+  if (user.role === 'company_leader') {
+    const userContext = await getUserTeamAndCompany(user.id);
+    return facility.team?.companyId === userContext.companyId;
+  }
+
+  // Unknown role - deny by default
+  return false;
+}
+
+/**
  * GET /api/facilities
  * List facilities with filtering and role-based access
  * Query params: search, company_id, team_id, facility_type, page, limit
@@ -78,7 +114,7 @@ router.get('/facilities', authenticateToken, async (req, res) => {
     // Role-based access filtering
     let facilityIds = null;
 
-    if (user.role === 'clinical_resource') {
+    if (user.role === 'clinical_resource' || user.role === 'facility_leader') {
       // Only assigned facilities
       const assignments = await UserFacility.findAll({
         where: { userId: user.id },
@@ -274,23 +310,9 @@ router.get('/facilities/:id', authenticateToken, async (req, res) => {
     }
 
     // Check access based on role
-    if (user.role === 'clinical_resource') {
-      const assignment = await UserFacility.findOne({
-        where: { userId: user.id, facilityId: id },
-      });
-      if (!assignment) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-    } else if (user.role === 'team_leader') {
-      const userContext = await getUserTeamAndCompany(user.id);
-      if (facility.team.id !== userContext.teamId) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-    } else if (user.role === 'company_leader') {
-      const userContext = await getUserTeamAndCompany(user.id);
-      if (facility.team.companyId !== userContext.companyId) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
+    const hasAccess = await checkFacilityAccess(user, facility);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     // Get scorecard stats for last 12 months
@@ -383,13 +405,26 @@ router.get('/facilities/:id', authenticateToken, async (req, res) => {
 router.get('/facilities/:id/scorecards', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const user = req.user;
     const { page = 1, limit = 12 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Verify facility exists and user has access (simplified check)
-    const facility = await Facility.findByPk(id);
+    // Verify facility exists
+    const facility = await Facility.findByPk(id, {
+      include: [{
+        model: Team,
+        as: 'team',
+        include: [{ model: Company, as: 'company' }],
+      }],
+    });
     if (!facility) {
       return res.status(404).json({ message: 'Facility not found' });
+    }
+
+    // Check access based on role
+    const hasAccess = await checkFacilityAccess(user, facility);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     const { rows: scorecards, count: total } = await Scorecard.findAndCountAll({
@@ -444,10 +479,23 @@ router.get('/facilities/:id/scorecards', authenticateToken, async (req, res) => 
 router.get('/facilities/:id/trend', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const user = req.user;
 
-    const facility = await Facility.findByPk(id);
+    const facility = await Facility.findByPk(id, {
+      include: [{
+        model: Team,
+        as: 'team',
+        include: [{ model: Company, as: 'company' }],
+      }],
+    });
     if (!facility) {
       return res.status(404).json({ message: 'Facility not found' });
+    }
+
+    // Check access based on role
+    const hasAccess = await checkFacilityAccess(user, facility);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     // Get last 12 months of scorecards

@@ -47,4 +47,10 @@ export const usersApi = {
     const response = await client.put(`/users/${id}/password`, { password });
     return response.data;
   },
+
+  // Impersonate user (for testing)
+  impersonate: async (id) => {
+    const response = await client.post(`/users/${id}/impersonate`);
+    return response.data;
+  },
 };

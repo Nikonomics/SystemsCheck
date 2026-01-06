@@ -102,10 +102,29 @@ export function KevHistoricalImport() {
 
   // Handle file selection toggle
   const handleFileToggle = (filename) => {
-    setSelectedFiles(prev => ({
-      ...prev,
-      [filename]: !prev[filename]
-    }));
+    const result = validationResults?.results?.find(r => r.filename === filename);
+
+    // If this file is part of a duplicate group, deselect others in the same group
+    if (result?.duplicateGroup) {
+      setSelectedFiles(prev => {
+        const newSelected = { ...prev };
+        // If we're selecting this file, deselect others in the same duplicate group
+        if (!prev[filename]) {
+          validationResults.results
+            .filter(r => r.duplicateGroup === result.duplicateGroup && r.filename !== filename)
+            .forEach(r => {
+              newSelected[r.filename] = false;
+            });
+        }
+        newSelected[filename] = !prev[filename];
+        return newSelected;
+      });
+    } else {
+      setSelectedFiles(prev => ({
+        ...prev,
+        [filename]: !prev[filename]
+      }));
+    }
   };
 
   // Handle row expansion toggle for editing category scores
@@ -262,9 +281,23 @@ export function KevHistoricalImport() {
       }
 
       // Initialize selected state - all valid files are selected by default
+      // For duplicate groups, only select the first one
       const initialSelected = {};
+      const seenDuplicateGroups = new Set();
       results.results.forEach(r => {
-        initialSelected[r.filename] = r.isValid;
+        if (r.isValid) {
+          if (r.duplicateGroup) {
+            // Only select the first file in each duplicate group
+            if (!seenDuplicateGroups.has(r.duplicateGroup)) {
+              initialSelected[r.filename] = true;
+              seenDuplicateGroups.add(r.duplicateGroup);
+            } else {
+              initialSelected[r.filename] = false;
+            }
+          } else {
+            initialSelected[r.filename] = true;
+          }
+        }
       });
       setSelectedFiles(initialSelected);
 
@@ -296,10 +329,12 @@ export function KevHistoricalImport() {
     }
   }, []);
 
-  // Get selected and valid file count
+  // Get selected and valid file count (including duplicate choices)
   const getSelectedValidFiles = () => {
     if (!validationResults?.results) return [];
-    return validationResults.results.filter(r => r.isValid && selectedFiles[r.filename]);
+    return validationResults.results.filter(r =>
+      (r.isValid || r.isDuplicateInBatch) && selectedFiles[r.filename]
+    );
   };
 
   // Import files
@@ -647,8 +682,8 @@ export function KevHistoricalImport() {
                     return (
                       <>
                         <tr key={i} className={
-                          r.isValid
-                            ? (selectedFiles[r.filename] ? 'bg-green-50' : 'bg-gray-50')
+                          r.isValid || r.isDuplicateInBatch
+                            ? (selectedFiles[r.filename] ? 'bg-green-50' : r.isDuplicateInBatch ? 'bg-amber-50' : 'bg-gray-50')
                             : 'bg-red-50'
                         }>
                           <td className="px-2 py-2 text-center">
@@ -656,9 +691,12 @@ export function KevHistoricalImport() {
                               type="checkbox"
                               checked={!!selectedFiles[r.filename]}
                               onChange={() => handleFileToggle(r.filename)}
-                              disabled={!r.isValid}
+                              disabled={!r.isValid && !r.isDuplicateInBatch}
                               className="rounded border-gray-300 disabled:opacity-50"
                             />
+                            {r.isDuplicateInBatch && (
+                              <span className="block text-xs text-amber-600" title="Duplicate - select one">⚠️</span>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-center">
                             {hasCategories && (

@@ -1166,9 +1166,12 @@ router.post('/kev-historical/validate', upload.array('files', 100), async (req, 
         const batchKey = `${matchedFacilityId}-${finalMonth}-${finalYear}`;
         const isDuplicateInBatch = matchedFacilityId && finalMonth && finalYear && batchSet.has(batchKey);
 
+        // For intra-batch duplicates, don't mark as invalid - let user choose which to keep
+        // Add a warning and flag it with duplicateGroup so frontend can handle selection
+        let duplicateGroup = null;
         if (isDuplicateInBatch && !isDuplicateInDb) {
-          validation.errors.push(`Duplicate in upload batch: another file targets ${matchedFacilityName} - ${finalMonth}/${finalYear}`);
-          validation.isValid = false;
+          validation.warnings.push(`Duplicate in batch: choose one file for ${matchedFacilityName} - ${finalMonth}/${finalYear}`);
+          duplicateGroup = batchKey;
         }
 
         // Add to batch set for future duplicate detection
@@ -1208,7 +1211,9 @@ router.post('/kev-historical/validate', upload.array('files', 100), async (req, 
           overallScore: parsed.overallScore,
           isValid: validation.isValid && matchedFacilityId && finalMonth && finalYear,
           errors: validation.errors,
-          warnings: validation.warnings
+          warnings: validation.warnings,
+          duplicateGroup: duplicateGroup, // For intra-batch duplicates, allows user to choose
+          isDuplicateInBatch: !!duplicateGroup
         });
       } catch (error) {
         validationResults.push({

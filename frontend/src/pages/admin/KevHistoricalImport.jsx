@@ -710,16 +710,36 @@ export function KevHistoricalImport() {
                             : 'bg-red-50'
                         }>
                           <td className="px-2 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={!!selectedFiles[r.filename]}
-                              onChange={() => handleFileToggle(r.filename)}
-                              disabled={!r.isValid && !r.isDuplicateInBatch}
-                              className="rounded border-gray-300 disabled:opacity-50"
-                            />
-                            {r.isDuplicateInBatch && (
-                              <span className="block text-xs text-amber-600" title="Duplicate - select one">⚠️</span>
-                            )}
+                            {(() => {
+                              // Allow selection if:
+                              // 1. File is valid, OR
+                              // 2. File is a duplicate in batch (user can choose), OR
+                              // 3. File needs facility AND user has selected one, OR
+                              // 4. File needs date AND user has set it
+                              const hasFacilityOverride = !!facilityOverrides[r.filename];
+                              const hasDateOverride = !!(dateOverrides[r.filename]?.month && dateOverrides[r.filename]?.year);
+                              const canBeFixed = (r.needsFacility && hasFacilityOverride) ||
+                                                 (r.needsDateOverride && hasDateOverride);
+                              const canSelect = r.isValid || r.isDuplicateInBatch || canBeFixed;
+
+                              return (
+                                <>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selectedFiles[r.filename]}
+                                    onChange={() => handleFileToggle(r.filename)}
+                                    disabled={!canSelect}
+                                    className="rounded border-gray-300 disabled:opacity-50"
+                                  />
+                                  {r.isDuplicateInBatch && (
+                                    <span className="block text-xs text-amber-600" title="Duplicate - select one">⚠️</span>
+                                  )}
+                                  {canBeFixed && !r.isValid && (
+                                    <span className="block text-xs text-blue-600" title="Click Apply Overrides to validate">🔄</span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-2 text-center">
                             {hasCategories && (

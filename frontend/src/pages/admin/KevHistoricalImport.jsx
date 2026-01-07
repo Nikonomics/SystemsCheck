@@ -201,14 +201,20 @@ export function KevHistoricalImport() {
 
   // Re-validate with overrides
   const revalidateWithOverrides = async () => {
-    if (!files.length) return;
+    if (!files.length) {
+      setError('No files to revalidate. Please upload files again.');
+      return;
+    }
 
     try {
       setLoading(true);
+      setError(null);
       const formData = new FormData();
       files.forEach(f => formData.append('files', f));
       formData.append('dateOverrides', JSON.stringify(dateOverrides));
       formData.append('facilityOverrides', JSON.stringify(facilityOverrides));
+
+      console.log('Revalidating with overrides:', { dateOverrides, facilityOverrides });
 
       const results = await importApi.validateKevHistorical(formData);
       setValidationResults(results);
@@ -218,15 +224,32 @@ export function KevHistoricalImport() {
         setFacilities(results.facilities);
       }
 
-      // Initialize selected state for newly valid files
+      // Auto-select newly valid files (including those that were previously invalid)
       const newSelected = { ...selectedFiles };
+      const seenDuplicateGroups = new Set();
       results.results.forEach(r => {
-        if (r.isValid && newSelected[r.filename] === undefined) {
-          newSelected[r.filename] = true;
+        if (r.isValid) {
+          // For duplicates, only select if no other in group is selected
+          if (r.duplicateGroup) {
+            if (!seenDuplicateGroups.has(r.duplicateGroup)) {
+              newSelected[r.filename] = true;
+              seenDuplicateGroups.add(r.duplicateGroup);
+            }
+          } else {
+            // Auto-select newly valid files
+            newSelected[r.filename] = true;
+          }
         }
       });
       setSelectedFiles(newSelected);
+
+      // Show success message
+      const newlyValid = results.results.filter(r => r.isValid).length;
+      if (newlyValid > 0) {
+        console.log(`Revalidation complete: ${newlyValid} valid files`);
+      }
     } catch (err) {
+      console.error('Revalidation error:', err);
       setError(err.message || 'Failed to revalidate');
     } finally {
       setLoading(false);

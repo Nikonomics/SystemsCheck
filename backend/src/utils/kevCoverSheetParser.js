@@ -441,15 +441,16 @@ function validateCoverSheetData(data) {
     warnings.push('Total met score not found');
   }
 
-  // Validate score ranges
+  // Validate score ranges - these are warnings, not errors
+  // For KEV imports we care about the percentage scores, not met/possible breakdown
   for (const area of data.qualityAreas) {
-    if (area.metScore > area.possibleScore) {
-      errors.push(`${area.category}: met score (${area.metScore}) > possible (${area.possibleScore})`);
+    if (area.metScore > area.possibleScore && area.possibleScore > 0) {
+      warnings.push(`${area.category}: met (${area.metScore}) > possible (${area.possibleScore}) - using percentage`);
     }
   }
 
-  if (data.totalMet > data.totalPossible) {
-    errors.push(`Total met (${data.totalMet}) > total possible (${data.totalPossible})`);
+  if (data.totalMet > data.totalPossible && data.totalPossible > 0) {
+    warnings.push(`Total met (${data.totalMet}) > possible (${data.totalPossible}) - using percentage`);
   }
 
   return {

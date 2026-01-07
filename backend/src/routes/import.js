@@ -1115,6 +1115,15 @@ router.post('/kev-historical/validate', upload.array('files', 100), async (req, 
         // Check for manual date override for this file
         const override = dateOverrides[file.originalname] || {};
 
+        // Debug: log override lookup
+        if (Object.keys(dateOverrides).length > 0) {
+          console.log('Date overrides lookup:', {
+            filename: file.originalname,
+            override,
+            allOverrides: dateOverrides
+          });
+        }
+
         // Apply manual overrides
         let finalMonth = override.month || parsed.month;
         let finalYear = override.year || parsed.year;
@@ -1122,6 +1131,7 @@ router.post('/kev-historical/validate', upload.array('files', 100), async (req, 
 
         if (override.month || override.year) {
           dateSource = 'manual';
+          console.log(`Applied date override for ${file.originalname}: ${finalMonth}/${finalYear}`);
         }
 
         // Validate the data
